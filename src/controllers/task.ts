@@ -29,29 +29,75 @@ export const assignTask = async (req: AuthenticatedRequest, res: Response): Prom
         const { id } = req.params;
         const { assignedTo } = req.body;
 
-        const task = await Task.findByIdAndUpdate(
-            id,
-            { assignedTo },
-            { new: true }
-        );
+        const taskToUpdate = await Task.findById(id);
 
-        if (!task) {
+        if (!taskToUpdate) {
             res.status(404).json({ message: "Không tìm thấy công việc" });
             return;
         }
 
-        res.status(200).json({ message: "Giao công việc thành công", task });
+
+        if (assignedTo) {
+            try {
+                const userResponse = await fetch(`http://localhost:5000/api/user/user/${assignedTo}`);
+                if (!userResponse.ok) {
+                    res.status(400).json({ message: "Người dùng được giao không tồn tại" });
+                    return;
+                }
+            } catch (err) {
+                console.error("Lỗi khi kiểm tra user:", err);
+                res.status(500).json({ message: "Lỗi kết nối đến dịch vụ người dùng" });
+                return;
+            }
+        }
+
+        taskToUpdate.assignedTo = assignedTo;
+        await taskToUpdate.save();
+
+        res.status(200).json({ message: "Giao lại công việc thành công", task: taskToUpdate });
     } catch (error: any) {
-        res.status(500).json({ message: "Lỗi khi giao công việc", error: error.message });
+        res.status(500).json({ message: "Lỗi khi giao lại công việc", error: error.message });
     }
 };
 
 
+const populateUsersInTasks = async (tasks: any[], authHeader: string | undefined) => {
+    try {
+        const usersResponse = await fetch('http://localhost:5000/api/user/user/all', {
+            headers: {
+                Authorization: authHeader || ''
+            }
+        });
+        
+        if (usersResponse.ok) {
+            const usersData = await usersResponse.json();
+            const usersMap = new Map();
+            if (usersData.users && Array.isArray(usersData.users)) {
+                usersData.users.forEach((u: any) => usersMap.set(u._id.toString(), { 
+                    _id: u._id, 
+                    username: u.username, 
+                    email: u.email 
+                }));
+            }
+
+            return tasks.map(task => ({
+                ...task,
+                createdBy: usersMap.get(task.createdBy?.toString()) || task.createdBy,
+                assignedTo: usersMap.get(task.assignedTo?.toString()) || task.assignedTo
+            }));
+        }
+    } catch (err) {
+        console.error("Lỗi khi fetch users để populate:", err);
+    }
+    return tasks;
+};
+
 export const getAllTasks = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
     try {
-        const tasks = await Task.find().sort({ createdAt: -1 });
+        const tasks = await Task.find().sort({ createdAt: -1 }).lean();
+        const populatedTasks = await populateUsersInTasks(tasks, req.headers.authorization);
 
-        res.status(200).json({ tasks });
+        res.status(200).json({ tasks: populatedTasks });
     } catch (error: any) {
         res.status(500).json({ message: "Lỗi khi lấy danh sách công việc", error: error.message });
     }
@@ -77,9 +123,10 @@ export const deleteTask = async (req: AuthenticatedRequest, res: Response): Prom
 
 export const getMyTasks = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
     try {
-        const tasks = await Task.find({ assignedTo: req.user._id }).sort({ createdAt: -1 });
+        const tasks = await Task.find({ assignedTo: req.user._id }).sort({ createdAt: -1 }).lean();
+        const populatedTasks = await populateUsersInTasks(tasks, req.headers.authorization);
 
-        res.status(200).json({ tasks });
+        res.status(200).json({ tasks: populatedTasks });
     } catch (error: any) {
         res.status(500).json({ message: "Lỗi khi lấy danh sách công việc ", error: error.message });
     }

@@ -90,25 +90,39 @@ router.patch("/:id/status", isAuth, updateTaskStatus);
  *             properties:
  *               title:
  *                 type: string
+ *                 description: Tiêu đề công việc (bắt buộc)
  *               description:
  *                 type: string
+ *                 description: Mô tả chi tiết công việc
+ *               priority:
+ *                 type: string
+ *                 enum: [low, medium, high]
+ *                 default: medium
+ *                 description: Mức độ ưu tiên của công việc
+ *               deadline:
+ *                 type: string
+ *                 format: date-time
+ *                 description: Hạn chót hoàn thành công việc (ISO string)
+ *               assignedTo:
+ *                 type: string
+ *                 description: ID của người dùng được giao công việc ngay lúc tạo
  *     responses:
  *       201:
  *         description: Tạo công việc thành công
  *       400:
- *         description: Thiếu tiêu đề
+ *         description: Thiếu tiêu đề hoặc dữ liệu không hợp lệ
  *       403:
  *         description: Không có quyền
  *       500:
- *         description: Server error
+ *         description: Lỗi server nội bộ
  */
 router.post("/", isAuth, isAdmin, createTask);
 
 /**
  * @swagger
  * /{id}/assign:
- *   post:
- *     summary: Giao công việc cho người dùng (chỉ Admin)
+ *   patch:
+ *     summary: Giao lại công việc cho người dùng (chỉ Admin)
  *     tags: [TODO]
  *     security:
  *       - bearerAuth: []
@@ -126,24 +140,24 @@ router.post("/", isAuth, isAdmin, createTask);
  *           schema:
  *             type: object
  *             required:
- *               - assignTo
+ *               - assignedTo
  *             properties:
- *               assignTo:
+ *               assignedTo:
  *                 type: string
  *                 description: ID của người dùng được giao công việc
  *     responses:
  *       200:
- *         description: Giao công việc thành công
+ *         description: Giao lại công việc thành công
  *       400:
- *         description: Thiếu assignTo hoặc dữ liệu không hợp lệ từ service người dùng
+ *         description: Người dùng được giao không tồn tại hoặc dữ liệu không hợp lệ
  *       403:
- *         description: Không có quyền
+ *         description: Không có quyền giao lại công việc này
  *       404:
  *         description: Không tìm thấy công việc
  *       500:
  *         description: Server error
  */
-router.post("/:id/assign", isAuth, isAdmin, assignTask);
+router.patch("/:id/assign", isAuth, isAdmin, assignTask);
 
 /**
  * @swagger
