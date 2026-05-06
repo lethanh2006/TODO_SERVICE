@@ -34,10 +34,7 @@ export const assignTask = async (req, res) => {
 };
 export const getAllTasks = async (req, res) => {
     try {
-        const tasks = await Task.find()
-            .populate("createdBy", "username email")
-            .populate("assignedTo", "username email")
-            .sort({ createdAt: -1 });
+        const tasks = await Task.find().sort({ createdAt: -1 });
         res.status(200).json({ tasks });
     }
     catch (error) {
@@ -60,9 +57,7 @@ export const deleteTask = async (req, res) => {
 };
 export const getMyTasks = async (req, res) => {
     try {
-        const tasks = await Task.find({ assignedTo: req.user._id })
-            .populate("createdBy", "username email")
-            .sort({ createdAt: -1 });
+        const tasks = await Task.find({ assignedTo: req.user._id }).sort({ createdAt: -1 });
         res.status(200).json({ tasks });
     }
     catch (error) {

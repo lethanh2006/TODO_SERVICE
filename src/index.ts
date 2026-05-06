@@ -16,7 +16,7 @@ app.use(cors());
 app.use(express.json());
 
 
-app.use("/api/v1", taskRoutes);
+app.use("/api/todo", taskRoutes);
 
 const swaggerSpec = swaggerJsdoc({
   definition: {
