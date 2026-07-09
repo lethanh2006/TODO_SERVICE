@@ -68,15 +68,15 @@ const populateUsersInTasks = async (tasks: any[], authHeader: string | undefined
                 Authorization: authHeader || ''
             }
         });
-        
+
         if (usersResponse.ok) {
             const usersData = await usersResponse.json();
             const usersMap = new Map();
             if (usersData.users && Array.isArray(usersData.users)) {
-                usersData.users.forEach((u: any) => usersMap.set(u._id.toString(), { 
-                    _id: u._id, 
-                    username: u.username, 
-                    email: u.email 
+                usersData.users.forEach((u: any) => usersMap.set(u._id.toString(), {
+                    _id: u._id,
+                    username: u.username,
+                    email: u.email
                 }));
             }
 
