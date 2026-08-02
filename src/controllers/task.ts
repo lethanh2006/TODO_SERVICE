@@ -1,14 +1,55 @@
 import { Response } from "express";
+import mongoose from "mongoose";
 import { AuthenticatedRequest } from "../middleware/isAuth.js";
 import { Task } from "../model/Task.js";
 
+const TASK_STATUSES = ["todo", "in_progress", "done", "cancelled"] as const;
+type TaskStatus = (typeof TASK_STATUSES)[number];
+
+const isTaskStatus = (value: unknown): value is TaskStatus =>
+    typeof value === "string" && TASK_STATUSES.some((status) => status === value);
+
+const getUserServiceUrl = () =>
+    (process.env.USER_SERVICE_URL || process.env.USER_SERVICE || "http://localhost:5000")
+        .replace(/\/+$/, "");
+
+const isAdmin = (req: AuthenticatedRequest) =>
+    req.user?.role?.toString().toLowerCase() === "admin";
+
+const rejectNonAdmin = (req: AuthenticatedRequest, res: Response) => {
+    if (isAdmin(req)) return false;
+    res.status(403).json({ message: "Từ chối truy cập: Chỉ Admin được thực hiện thao tác này" });
+    return true;
+};
+
+const isExistingUser = async (userId: string) => {
+    if (!mongoose.isValidObjectId(userId)) return false;
+    const response = await fetch(`${getUserServiceUrl()}/api/user/internal/${encodeURIComponent(userId)}`);
+    return response.ok;
+};
+
+const isValidTaskId = (id: string, res: Response) => {
+    if (mongoose.isValidObjectId(id)) return true;
+    res.status(400).json({ message: "ID công việc không hợp lệ" });
+    return false;
+};
 
 export const createTask = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
     try {
+        if (rejectNonAdmin(req, res)) return;
         const { title, description, priority, deadline, assignedTo } = req.body;
 
+        if (typeof title !== "string" || !title.trim()) {
+            res.status(400).json({ message: "Tiêu đề không được để trống" });
+            return;
+        }
+        if (assignedTo && !(await isExistingUser(String(assignedTo)))) {
+            res.status(400).json({ message: "Người dùng được giao không tồn tại" });
+            return;
+        }
+
         const newTask = new Task({
-            title,
+            title: title.trim(),
             description,
             priority,
             deadline,
@@ -26,8 +67,15 @@ export const createTask = async (req: AuthenticatedRequest, res: Response): Prom
 
 export const assignTask = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
     try {
+        if (rejectNonAdmin(req, res)) return;
         const { id } = req.params;
         const { assignedTo } = req.body;
+
+        if (!isValidTaskId(id, res)) return;
+        if (!assignedTo) {
+            res.status(400).json({ message: "Cần cung cấp người được giao" });
+            return;
+        }
 
         const taskToUpdate = await Task.findById(id);
 
@@ -36,19 +84,15 @@ export const assignTask = async (req: AuthenticatedRequest, res: Response): Prom
             return;
         }
 
-
-        if (assignedTo) {
-            try {
-                const userResponse = await fetch(`http://localhost:5000/api/user/user/${assignedTo}`);
-                if (!userResponse.ok) {
-                    res.status(400).json({ message: "Người dùng được giao không tồn tại" });
-                    return;
-                }
-            } catch (err) {
-                console.error("Lỗi khi kiểm tra user:", err);
-                res.status(500).json({ message: "Lỗi kết nối đến dịch vụ người dùng" });
+        try {
+            if (!(await isExistingUser(String(assignedTo)))) {
+                res.status(400).json({ message: "Người dùng được giao không tồn tại" });
                 return;
             }
+        } catch (err) {
+            console.error("Lỗi khi kiểm tra user:", err);
+            res.status(503).json({ message: "Không kết nối được dịch vụ người dùng" });
+            return;
         }
 
         taskToUpdate.assignedTo = assignedTo;
@@ -61,11 +105,11 @@ export const assignTask = async (req: AuthenticatedRequest, res: Response): Prom
 };
 
 
-const populateUsersInTasks = async (tasks: any[], authHeader: string | undefined) => {
+const populateUsersInTasks = async (tasks: any[], userPayload: string | undefined) => {
     try {
-        const usersResponse = await fetch('http://localhost:5000/api/user/user/all', {
+        const usersResponse = await fetch(`${getUserServiceUrl()}/api/user/user/all`, {
             headers: {
-                Authorization: authHeader || ''
+                "x-user-payload": userPayload || ""
             }
         });
 
@@ -94,8 +138,12 @@ const populateUsersInTasks = async (tasks: any[], authHeader: string | undefined
 
 export const getAllTasks = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
     try {
+        if (rejectNonAdmin(req, res)) return;
         const tasks = await Task.find().sort({ createdAt: -1 }).lean();
-        const populatedTasks = await populateUsersInTasks(tasks, req.headers.authorization);
+        const populatedTasks = await populateUsersInTasks(
+            tasks,
+            typeof req.headers["x-user-payload"] === "string" ? req.headers["x-user-payload"] : undefined
+        );
 
         res.status(200).json({ tasks: populatedTasks });
     } catch (error: any) {
@@ -106,7 +154,9 @@ export const getAllTasks = async (req: AuthenticatedRequest, res: Response): Pro
 
 export const deleteTask = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
     try {
+        if (rejectNonAdmin(req, res)) return;
         const { id } = req.params;
+        if (!isValidTaskId(id, res)) return;
 
         const task = await Task.findByIdAndDelete(id);
 
@@ -124,7 +174,10 @@ export const deleteTask = async (req: AuthenticatedRequest, res: Response): Prom
 export const getMyTasks = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
     try {
         const tasks = await Task.find({ assignedTo: req.user._id }).sort({ createdAt: -1 }).lean();
-        const populatedTasks = await populateUsersInTasks(tasks, req.headers.authorization);
+        const populatedTasks = await populateUsersInTasks(
+            tasks,
+            typeof req.headers["x-user-payload"] === "string" ? req.headers["x-user-payload"] : undefined
+        );
 
         res.status(200).json({ tasks: populatedTasks });
     } catch (error: any) {
@@ -137,6 +190,12 @@ export const updateTaskStatus = async (req: AuthenticatedRequest, res: Response)
     try {
         const { id } = req.params;
         const { status } = req.body;
+
+        if (!isValidTaskId(id, res)) return;
+        if (!isTaskStatus(status)) {
+            res.status(400).json({ message: "Trạng thái công việc không hợp lệ" });
+            return;
+        }
 
         const task = await Task.findById(id);
 

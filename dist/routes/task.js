@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { isAuth, isAdmin } from "../middleware/isAuth.js";
+import { isAuth } from "../middleware/isAuth.js";
 import { createTask, assignTask, getAllTasks, deleteTask, getMyTasks, updateTaskStatus } from "../controllers/task.js";
 const router = Router();
 /**
@@ -104,7 +104,7 @@ router.patch("/:id/status", isAuth, updateTaskStatus);
  *       500:
  *         description: Lỗi server nội bộ
  */
-router.post("/", isAuth, isAdmin, createTask);
+router.post("/", isAuth, createTask);
 /**
  * @swagger
  * /{id}/assign:
@@ -144,7 +144,7 @@ router.post("/", isAuth, isAdmin, createTask);
  *       500:
  *         description: Server error
  */
-router.patch("/:id/assign", isAuth, isAdmin, assignTask);
+router.patch("/:id/assign", isAuth, assignTask);
 /**
  * @swagger
  * /:
@@ -161,7 +161,7 @@ router.patch("/:id/assign", isAuth, isAdmin, assignTask);
  *       500:
  *         description: Server error
  */
-router.get("/", isAuth, isAdmin, getAllTasks);
+router.get("/", isAuth, getAllTasks);
 /**
  * @swagger
  * /{id}:
@@ -187,5 +187,5 @@ router.get("/", isAuth, isAdmin, getAllTasks);
  *       500:
  *         description: Server error
  */
-router.delete("/:id", isAuth, isAdmin, deleteTask);
+router.delete("/:id", isAuth, deleteTask);
 export default router;
