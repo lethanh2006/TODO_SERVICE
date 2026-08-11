@@ -10,6 +10,9 @@ connectDb();
 const app = express();
 app.use(cors());
 app.use(express.json());
+app.get('/health', (_req, res) => {
+    res.json({ status: 'ok', service: 'todo' });
+});
 app.use("/api/todo", taskRoutes);
 const swaggerSpec = swaggerJsdoc({
     definition: {
