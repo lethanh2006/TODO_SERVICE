@@ -1,6 +1,7 @@
-import type { Request, Response, NextFunction } from "express";
+import type { Response, NextFunction } from "express";
+import type { RequestWithContext } from "../common/interfaces/request-context.interface.js";
 
-export interface AuthenticatedRequest extends Request {
+export interface AuthenticatedRequest extends RequestWithContext {
     user?: any;
 }
 

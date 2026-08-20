@@ -22,9 +22,11 @@ const rejectNonAdmin = (req: AuthenticatedRequest, res: Response) => {
     return true;
 };
 
-const isExistingUser = async (userId: string) => {
+const isExistingUser = async (userId: string, requestId: string) => {
     if (!mongoose.isValidObjectId(userId)) return false;
-    const response = await fetch(`${getUserServiceUrl()}/api/user/internal/${encodeURIComponent(userId)}`);
+    const response = await fetch(`${getUserServiceUrl()}/api/user/internal/${encodeURIComponent(userId)}`, {
+        headers: { "x-request-id": requestId },
+    });
     return response.ok;
 };
 
@@ -43,7 +45,10 @@ export const createTask = async (req: AuthenticatedRequest, res: Response): Prom
             res.status(400).json({ message: "Tiêu đề không được để trống" });
             return;
         }
-        if (assignedTo && !(await isExistingUser(String(assignedTo)))) {
+        if (assignedTo && !(await isExistingUser(
+            String(assignedTo),
+            req.requestContext?.requestId ?? "",
+        ))) {
             res.status(400).json({ message: "Người dùng được giao không tồn tại" });
             return;
         }
@@ -85,7 +90,10 @@ export const assignTask = async (req: AuthenticatedRequest, res: Response): Prom
         }
 
         try {
-            if (!(await isExistingUser(String(assignedTo)))) {
+            if (!(await isExistingUser(
+                String(assignedTo),
+                req.requestContext?.requestId ?? "",
+            ))) {
                 res.status(400).json({ message: "Người dùng được giao không tồn tại" });
                 return;
             }
@@ -105,11 +113,16 @@ export const assignTask = async (req: AuthenticatedRequest, res: Response): Prom
 };
 
 
-const populateUsersInTasks = async (tasks: any[], userPayload: string | undefined) => {
+const populateUsersInTasks = async (
+    tasks: any[],
+    userPayload: string | undefined,
+    requestId: string,
+) => {
     try {
         const usersResponse = await fetch(`${getUserServiceUrl()}/api/user/user/all`, {
             headers: {
-                "x-user-payload": userPayload || ""
+                "x-user-payload": userPayload || "",
+                "x-request-id": requestId,
             }
         });
 
@@ -142,7 +155,8 @@ export const getAllTasks = async (req: AuthenticatedRequest, res: Response): Pro
         const tasks = await Task.find().sort({ createdAt: -1 }).lean();
         const populatedTasks = await populateUsersInTasks(
             tasks,
-            typeof req.headers["x-user-payload"] === "string" ? req.headers["x-user-payload"] : undefined
+            typeof req.headers["x-user-payload"] === "string" ? req.headers["x-user-payload"] : undefined,
+            req.requestContext?.requestId ?? "",
         );
 
         res.status(200).json({ tasks: populatedTasks });
@@ -176,7 +190,8 @@ export const getMyTasks = async (req: AuthenticatedRequest, res: Response): Prom
         const tasks = await Task.find({ assignedTo: req.user._id }).sort({ createdAt: -1 }).lean();
         const populatedTasks = await populateUsersInTasks(
             tasks,
-            typeof req.headers["x-user-payload"] === "string" ? req.headers["x-user-payload"] : undefined
+            typeof req.headers["x-user-payload"] === "string" ? req.headers["x-user-payload"] : undefined,
+            req.requestContext?.requestId ?? "",
         );
 
         res.status(200).json({ tasks: populatedTasks });
