@@ -5,7 +5,7 @@
   "main": "index.js",
   "type": "module",
   "scripts": {
-    "test": "npm run build && node --test dist/common/middleware/request-id.middleware.test.js",
+    "test": "npm run build && node --test dist/common/middleware/request-id.middleware.test.js dist/common/interceptors/http-logging.interceptor.test.js",
     "build": "tsc",
     "start": "node dist/index.js",
     "dev": "concurrently \"tsc -w\" \"nodemon dist/index.js\""
