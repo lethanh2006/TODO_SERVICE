@@ -5,6 +5,9 @@ import connectDb from './config/db.js';
 import taskRoutes from './routes/task.js';
 import swaggerJsdoc from 'swagger-jsdoc';
 import swaggerUi from 'swagger-ui-express';
+import { globalExceptionFilter } from './common/filters/global-exception.filter.js';
+import { httpLoggingInterceptor } from './common/interceptors/http-logging.interceptor.js';
+import { requestIdMiddleware } from './common/middleware/request-id.middleware.js';
 
 dotenv.config();
 
@@ -12,6 +15,8 @@ connectDb();
 
 const app = express();
 
+app.use(requestIdMiddleware);
+app.use(httpLoggingInterceptor);
 app.use(cors());
 app.use(express.json());
 
@@ -49,6 +54,12 @@ app.get('/api/docs.json', (req, res) => {
   res.setHeader('Content-Type', 'application/json');
   res.send(swaggerSpec);
 });
+
+app.use((_request, _response, next) => {
+  const notFoundError = Object.assign(new Error('Not Found'), { status: 404 });
+  next(notFoundError);
+});
+app.use(globalExceptionFilter);
 
 const port = process.env.PORT || 5003;
 
