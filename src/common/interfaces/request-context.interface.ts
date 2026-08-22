@@ -1,11 +1,10 @@
-import type { Request } from "express";
+import type { RequestWithAuthenticatedUser } from "./authenticated-user.interface";
 
-/** Dữ liệu theo suốt một HTTP request để tracing và logging. */
 export interface RequestContext {
-    requestId: string;
-    startedAt: bigint;
+  requestId: string;
+  startedAt: bigint;
 }
 
-export interface RequestWithContext extends Request {
-    requestContext?: RequestContext;
+export interface RequestWithContext extends RequestWithAuthenticatedUser {
+  requestContext?: RequestContext;
 }
