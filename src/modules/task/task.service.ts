@@ -1,5 +1,6 @@
 import {
   BadRequestException,
+  ConflictException,
   ForbiddenException,
   HttpException,
   HttpStatus,
@@ -85,6 +86,12 @@ export class TaskService {
       if (!task) {
         throw new NotFoundException({ message: "Không tìm thấy công việc" });
       }
+      if (task.status === "done" || task.status === "cancelled") {
+        throw new ConflictException({
+          message:
+            "Không thể giao lại công việc đã hoàn thành hoặc đã huỷ; hãy mở lại công việc trước",
+        });
+      }
       try {
         if (!(await this.userClient.exists(dto.assignedTo, requestId))) {
           throw new BadRequestException({
@@ -97,9 +104,22 @@ export class TaskService {
           message: "Không kết nối được dịch vụ người dùng",
         });
       }
-      task.assignedTo = dto.assignedTo as any;
-      await task.save();
-      return { message: "Giao lại công việc thành công", task };
+      const updatedTask = await this.taskModel.findOneAndUpdate(
+        {
+          _id: id,
+          status: task.status,
+          assignedTo: task.assignedTo ?? null,
+        },
+        { $set: { assignedTo: dto.assignedTo } },
+        { new: true, runValidators: true },
+      );
+      if (!updatedTask) {
+        throw new ConflictException({
+          message:
+            "Công việc đã thay đổi trạng thái hoặc người được giao; vui lòng tải lại",
+        });
+      }
+      return { message: "Giao lại công việc thành công", task: updatedTask };
     } catch (error) {
       this.rethrowOrFail(error, "Lỗi khi giao lại công việc");
     }
@@ -234,16 +254,46 @@ export class TaskService {
         throw new NotFoundException({ message: "Không tìm thấy công việc" });
       }
       const currentUserId = authenticatedUserId(user);
-      const assigned = String(task.assignedTo) === currentUserId;
+      const assigned = this.matchesId(task.assignedTo, currentUserId);
       const canManage = isManagementRole(user.role);
       if (!assigned && !canManage) {
         throw new ForbiddenException({
           message: "Từ chối truy cập: Không được giao công việc này",
         });
       }
-      task.status = status;
-      await task.save();
-      return { message: "Cập nhật trạng thái công việc thành công", task };
+      if (task.status === status) {
+        return { message: "Trạng thái công việc không thay đổi", task };
+      }
+
+      const allowedTransitions = canManage
+        ? MANAGEMENT_TRANSITIONS[task.status]
+        : ASSIGNEE_TRANSITIONS[task.status];
+      if (!allowedTransitions.includes(status)) {
+        throw new ConflictException({
+          message: `Không thể chuyển trạng thái công việc từ ${task.status} sang ${status}`,
+        });
+      }
+
+      const filter: QueryFilter<TaskDocument> = {
+        _id: id,
+        status: task.status,
+      };
+      if (!canManage) filter.assignedTo = currentUserId;
+      const updatedTask = await this.taskModel.findOneAndUpdate(
+        filter,
+        { $set: { status } },
+        { new: true, runValidators: true },
+      );
+      if (!updatedTask) {
+        throw new ConflictException({
+          message:
+            "Công việc đã thay đổi trạng thái hoặc người được giao; vui lòng tải lại",
+        });
+      }
+      return {
+        message: "Cập nhật trạng thái công việc thành công",
+        task: updatedTask,
+      };
     } catch (error) {
       this.rethrowOrFail(error, "Lỗi khi cập nhật trạng thái công việc");
     }
