@@ -6,6 +6,7 @@ import {
   Param,
   Patch,
   Post,
+  Query,
   Req,
   UseGuards,
 } from "@nestjs/common";
@@ -16,6 +17,8 @@ import { RolesGuard } from "../../common/guards/roles.guard";
 import type { RequestWithContext } from "../../common/interfaces/request-context.interface";
 import { AssignTaskDto } from "./dto/assign-task.dto";
 import { CreateTaskDto } from "./dto/create-task.dto";
+import { MyTaskQueryDto, TaskQueryDto } from "./dto/task-query.dto";
+import { UpdateTaskDto } from "./dto/update-task.dto";
 import { UpdateTaskStatusDto } from "./dto/update-task-status.dto";
 import { TaskService } from "./task.service";
 
@@ -26,9 +29,13 @@ export class TaskController {
 
   @Get("my-tasks")
   @Authenticated()
-  getMyTasks(@Req() request: RequestWithContext) {
+  getMyTasks(
+    @Query() query: MyTaskQueryDto,
+    @Req() request: RequestWithContext,
+  ) {
     return this.taskService.findMine(
       request.user!,
+      query,
       this.userPayload(request),
       this.requestId(request),
     );
@@ -64,10 +71,32 @@ export class TaskController {
     return this.taskService.assign(id, body, this.requestId(request));
   }
 
+  @Patch(":id")
+  @Roles(...MANAGEMENT_ROLES)
+  update(
+    @Param("id") id: string,
+    @Body() body: UpdateTaskDto,
+    @Req() request: RequestWithContext,
+  ) {
+    return this.taskService.update(id, body, request.user!);
+  }
+
   @Get()
   @Roles(...MANAGEMENT_ROLES)
-  getAll(@Req() request: RequestWithContext) {
+  getAll(@Query() query: TaskQueryDto, @Req() request: RequestWithContext) {
     return this.taskService.findAll(
+      query,
+      this.userPayload(request),
+      this.requestId(request),
+    );
+  }
+
+  @Get(":id")
+  @Authenticated()
+  getOne(@Param("id") id: string, @Req() request: RequestWithContext) {
+    return this.taskService.findOne(
+      id,
+      request.user!,
       this.userPayload(request),
       this.requestId(request),
     );
