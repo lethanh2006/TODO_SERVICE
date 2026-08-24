@@ -5,15 +5,24 @@ import {
   ServiceUnavailableException,
 } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
+import { createHmac } from "node:crypto";
 import { StructuredLoggerService } from "../../common/observability/structured-logger.service";
 import { toError } from "../../common/utils/error.util";
 
 type TaskRow = Record<string, any>;
 
+const DIRECTORY_PATH = "/api/user/user/all";
+const FORBIDDEN_INTERNAL_SECRETS = new Set([
+  "replace_with_at_least_32_random_characters",
+  "your-super-secret-key-chatapp",
+  "your_jwt_secret_here",
+]);
+
 @Injectable()
 export class UserClientService {
   private readonly baseUrl: string;
   private readonly timeoutMs: number;
+  private readonly userInternalSecret: string;
 
   constructor(
     config: ConfigService,
@@ -26,6 +35,9 @@ export class UserClientService {
     ).replace(/\/+$/, "");
     this.timeoutMs = this.parseTimeout(
       config.get<string | number>("USER_SERVICE_TIMEOUT_MS"),
+    );
+    this.userInternalSecret = this.requireInternalSecret(
+      config.get<string>("USER_INTERNAL_SECRET"),
     );
   }
 
@@ -43,14 +55,13 @@ export class UserClientService {
     userPayload: string | undefined,
     requestId: string,
   ): Promise<TaskRow[]> {
+    if (tasks.length === 0 || !userPayload) return tasks;
+
     try {
       const response = await this.request(
-        "/api/user/user/all",
+        DIRECTORY_PATH,
         {
-          headers: {
-            "x-user-payload": userPayload ?? "",
-            "x-request-id": requestId,
-          },
+          headers: this.signedDirectoryHeaders(userPayload, requestId),
         },
         { operation: "enrich_tasks", requestId },
       );
@@ -145,6 +156,35 @@ export class UserClientService {
     return Number.isFinite(timeoutMs) && timeoutMs > 0
       ? Math.min(Math.trunc(timeoutMs), 60_000)
       : 3000;
+  }
+
+  private requireInternalSecret(value: string | undefined): string {
+    const secret = value?.trim();
+    if (
+      !secret ||
+      Buffer.byteLength(secret) < 32 ||
+      FORBIDDEN_INTERNAL_SECRETS.has(secret.toLowerCase())
+    ) {
+      throw new Error("USER_INTERNAL_SECRET phải có ít nhất 32 byte");
+    }
+    return secret;
+  }
+
+  private signedDirectoryHeaders(
+    payload: string,
+    requestId: string,
+  ): Record<string, string> {
+    const timestamp = Date.now().toString();
+    const context = `GET:${DIRECTORY_PATH}`;
+    const signature = createHmac("sha256", this.userInternalSecret)
+      .update(`${timestamp}.${requestId}.${payload}.${context}`)
+      .digest("hex");
+    return {
+      "x-request-id": requestId,
+      "x-user-payload": payload,
+      "x-user-timestamp": timestamp,
+      "x-user-signature": signature,
+    };
   }
 
   private durationMs(startedAt: bigint): number {
