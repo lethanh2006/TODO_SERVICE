@@ -22,13 +22,14 @@ export class GlobalExceptionFilter implements ExceptionFilter {
   catch(exception: unknown, host: ArgumentsHost): void {
     const http = host.switchToHttp();
     const request = http.getRequest<RequestWithContext>();
+    const requestId = request.requestContext?.requestId ?? "unknown";
     const statusCode =
       exception instanceof HttpException
         ? exception.getStatus()
         : HttpStatus.INTERNAL_SERVER_ERROR;
     const error = toError(exception);
     const details = {
-      requestId: request.requestContext?.requestId ?? "unknown",
+      requestId,
       userId: request.user?._id ?? request.user?.id,
       method: request.method,
       path: request.originalUrl ?? request.url,
@@ -46,18 +47,41 @@ export class GlobalExceptionFilter implements ExceptionFilter {
 
     const exceptionBody =
       exception instanceof HttpException ? exception.getResponse() : null;
-    const responseBody =
-      exceptionBody !== null && typeof exceptionBody === "object"
-        ? exceptionBody
-        : {
-            statusCode,
-            message: exceptionBody ?? "Internal server error",
-            requestId: request.requestContext?.requestId ?? "unknown",
-          };
+    const responseBody = this.safeResponseBody(
+      exceptionBody,
+      statusCode,
+      requestId,
+    );
     this.adapterHost.httpAdapter.reply(
       http.getResponse(),
       responseBody,
       statusCode,
     );
+  }
+
+  private safeResponseBody(
+    exceptionBody: string | object | null,
+    statusCode: number,
+    requestId: string,
+  ): Record<string, unknown> {
+    if (statusCode >= 500) {
+      return {
+        statusCode,
+        message: "Internal server error",
+        requestId,
+      };
+    }
+    if (
+      exceptionBody !== null &&
+      typeof exceptionBody === "object" &&
+      !Array.isArray(exceptionBody)
+    ) {
+      return { ...exceptionBody, requestId };
+    }
+    return {
+      statusCode,
+      message: exceptionBody ?? "Request rejected",
+      requestId,
+    };
   }
 }
