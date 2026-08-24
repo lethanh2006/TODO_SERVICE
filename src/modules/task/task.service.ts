@@ -13,6 +13,7 @@ import {
   authenticatedUserId,
   type AuthenticatedUser,
 } from "../../common/interfaces/authenticated-user.interface";
+import { isManagementRole } from "../../common/enums/role.enum";
 import { toError } from "../../common/utils/error.util";
 import {
   Task,
@@ -138,8 +139,8 @@ export class TaskService {
       }
       const currentUserId = authenticatedUserId(user);
       const assigned = String(task.assignedTo) === currentUserId;
-      const admin = user.role?.toLowerCase() === "admin";
-      if (!assigned && !admin) {
+      const canManage = isManagementRole(user.role);
+      if (!assigned && !canManage) {
         throw new ForbiddenException({
           message: "Từ chối truy cập: Không được giao công việc này",
         });

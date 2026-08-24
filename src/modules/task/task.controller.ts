@@ -11,7 +11,7 @@ import {
 } from "@nestjs/common";
 import { Authenticated } from "../../common/decorators/authenticated.decorator";
 import { Roles } from "../../common/decorators/roles.decorator";
-import { Role } from "../../common/enums/role.enum";
+import { MANAGEMENT_ROLES } from "../../common/enums/role.enum";
 import { RolesGuard } from "../../common/guards/roles.guard";
 import type { RequestWithContext } from "../../common/interfaces/request-context.interface";
 import { AssignTaskDto } from "./dto/assign-task.dto";
@@ -45,7 +45,7 @@ export class TaskController {
   }
 
   @Post()
-  @Roles(Role.ADMIN)
+  @Roles(...MANAGEMENT_ROLES)
   create(@Body() body: CreateTaskDto, @Req() request: RequestWithContext) {
     return this.taskService.create(
       body,
@@ -55,7 +55,7 @@ export class TaskController {
   }
 
   @Patch(":id/assign")
-  @Roles(Role.ADMIN)
+  @Roles(...MANAGEMENT_ROLES)
   assign(
     @Param("id") id: string,
     @Body() body: AssignTaskDto,
@@ -65,7 +65,7 @@ export class TaskController {
   }
 
   @Get()
-  @Roles(Role.ADMIN)
+  @Roles(...MANAGEMENT_ROLES)
   getAll(@Req() request: RequestWithContext) {
     return this.taskService.findAll(
       this.userPayload(request),
@@ -74,7 +74,7 @@ export class TaskController {
   }
 
   @Delete(":id")
-  @Roles(Role.ADMIN)
+  @Roles(...MANAGEMENT_ROLES)
   remove(@Param("id") id: string) {
     return this.taskService.remove(id);
   }
