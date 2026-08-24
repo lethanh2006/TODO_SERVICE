@@ -108,46 +108,29 @@ export class UserClientService {
       allowNotFound?: boolean;
     },
   ): Promise<Response> {
-    const startedAt = process.hrtime.bigint();
     try {
       const response = await fetch(`${this.baseUrl}${path}`, {
         ...init,
         signal: AbortSignal.timeout(this.timeoutMs),
       });
-      const details = {
-        requestId: context.requestId,
-        operation: context.operation,
-        statusCode: response.status,
-        durationMs: this.durationMs(startedAt),
-      };
 
       if (response.status >= 500 || response.status === 429) {
-        this.logger.warn("user_service_unavailable", details);
         throw new ServiceUnavailableException({
           message: "Dịch vụ người dùng tạm thời không khả dụng",
         });
       }
       if (!response.ok && !(context.allowNotFound && response.status === 404)) {
-        this.logger.warn("user_service_bad_response", details);
         throw new BadGatewayException({
           message: "Phản hồi từ dịch vụ người dùng không hợp lệ",
         });
       }
 
-      this.logger.info("user_service_request_completed", details);
       return response;
     } catch (error: unknown) {
       if (error instanceof HttpException) throw error;
-      this.logger.warn("user_service_request_failed", {
-        requestId: context.requestId,
-        operation: context.operation,
-        statusCode: 503,
-        durationMs: this.durationMs(startedAt),
-        errorName: toError(error).name,
-      });
       throw new ServiceUnavailableException({
         message: "Không kết nối được dịch vụ người dùng",
-      });
+      }, { cause: toError(error) });
     }
   }
 
@@ -185,9 +168,5 @@ export class UserClientService {
       "x-user-timestamp": timestamp,
       "x-user-signature": signature,
     };
-  }
-
-  private durationMs(startedAt: bigint): number {
-    return Number(process.hrtime.bigint() - startedAt) / 1e6;
   }
 }

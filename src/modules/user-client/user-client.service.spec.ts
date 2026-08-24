@@ -43,7 +43,7 @@ describe("UserClientService", () => {
     jest.restoreAllMocks();
   });
 
-  it("forward request-id và timeout khi kiểm tra user", async () => {
+  it("forward request-id và timeout mà không tạo success log", async () => {
     fetchMock.mockResolvedValue({ ok: true, status: 200 });
     const service = new UserClientService(config, logger);
 
@@ -56,14 +56,7 @@ describe("UserClientService", () => {
         signal: expect.any(AbortSignal),
       },
     );
-    expect(logInfo).toHaveBeenCalledWith(
-      "user_service_request_completed",
-      expect.objectContaining({
-        requestId: "req-123",
-        operation: "user_exists",
-        statusCode: 200,
-      }),
-    );
+    expect(logInfo).not.toHaveBeenCalled();
   });
 
   it("chỉ coi 404 là user không tồn tại", async () => {
@@ -91,24 +84,19 @@ describe("UserClientService", () => {
     );
   });
 
-  it("map timeout hoặc lỗi mạng thành 503 và log request-id", async () => {
+  it("map timeout thành 503, giữ cause và không log trước boundary", async () => {
     const timeout = new Error("timed out");
     timeout.name = "TimeoutError";
     fetchMock.mockRejectedValue(timeout);
     const service = new UserClientService(config, logger);
 
-    await expect(service.exists("user", "req-timeout")).rejects.toBeInstanceOf(
-      ServiceUnavailableException,
-    );
-    expect(logWarn).toHaveBeenCalledWith(
-      "user_service_request_failed",
-      expect.objectContaining({
-        requestId: "req-timeout",
-        operation: "user_exists",
-        statusCode: 503,
-        errorName: "TimeoutError",
-      }),
-    );
+    const error = await service
+      .exists("user", "req-timeout")
+      .catch((caught: unknown) => caught as ServiceUnavailableException);
+
+    expect(error).toBeInstanceOf(ServiceUnavailableException);
+    expect(error.cause).toBe(timeout);
+    expect(logWarn).not.toHaveBeenCalled();
   });
 
   it("ký payload khi lấy danh bạ để enrich task", async () => {
