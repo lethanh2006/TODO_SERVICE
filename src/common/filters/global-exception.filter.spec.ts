@@ -34,7 +34,6 @@ describe("GlobalExceptionFilter", () => {
     headers: {},
     requestContext: {
       requestId: "req-filter-123",
-      startedAt: process.hrtime.bigint(),
     },
   } as unknown as RequestWithContext;
   const response = {};
