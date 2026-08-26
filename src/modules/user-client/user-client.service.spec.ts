@@ -8,6 +8,11 @@ import type { StructuredLoggerService } from '../../common/observability/structu
 import { UserClientService } from './user-client.service';
 
 describe('UserClientService', () => {
+  const anyAbortSignal: unknown = expect.any(AbortSignal);
+  const assignedUser: unknown = expect.objectContaining({
+    _id: 'employee-id',
+    username: 'Nguyễn An',
+  });
   const userInternalSecret = '0123456789abcdef0123456789abcdef';
   const originalFetch = globalThis.fetch;
   const fetchMock = jest.fn();
@@ -53,7 +58,7 @@ describe('UserClientService', () => {
       'http://user:5000/api/user/internal/user%2Fid',
       {
         headers: { 'x-request-id': 'req-123' },
-        signal: expect.any(AbortSignal),
+        signal: anyAbortSignal,
       },
     );
     expect(logInfo).not.toHaveBeenCalled();
@@ -122,10 +127,7 @@ describe('UserClientService', () => {
       ),
     ).resolves.toEqual([
       expect.objectContaining({
-        assignedTo: expect.objectContaining({
-          _id: 'employee-id',
-          username: 'Nguyễn An',
-        }),
+        assignedTo: assignedUser,
       }),
     ]);
 

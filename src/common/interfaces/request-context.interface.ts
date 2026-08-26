@@ -6,4 +6,7 @@ export interface RequestContext {
 
 export interface RequestWithContext extends RequestWithAuthenticatedUser {
   requestContext?: RequestContext;
+  route: {
+    path?: unknown;
+  };
 }

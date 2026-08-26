@@ -9,7 +9,17 @@ import { createHmac } from 'node:crypto';
 import { StructuredLoggerService } from '../../common/observability/structured-logger.service';
 import { toError } from '../../common/utils/error.util';
 
-type TaskRow = Record<string, any>;
+type TaskRow = Record<string, unknown>;
+
+interface DirectoryUser {
+  _id: unknown;
+  username: unknown;
+  email: unknown;
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
 
 const DIRECTORY_PATH = '/api/user/user/all';
 const FORBIDDEN_INTERNAL_SECRETS = new Set([
@@ -74,15 +84,16 @@ export class UserClientService {
         });
         return tasks;
       }
-      const users = new Map(
-        payload.users.map((raw) => {
-          const user = raw as Record<string, any>;
-          return [
-            String(user._id),
-            { _id: user._id, username: user.username, email: user.email },
-          ];
-        }),
-      );
+      const users = new Map<string, DirectoryUser>();
+      for (const raw of payload.users) {
+        if (!isRecord(raw)) continue;
+        const user = {
+          _id: raw._id,
+          username: raw.username,
+          email: raw.email,
+        };
+        users.set(String(user._id), user);
+      }
       return tasks.map((task) => ({
         ...task,
         createdBy: users.get(String(task.createdBy)) ?? task.createdBy,

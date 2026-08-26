@@ -14,6 +14,7 @@ import type { StructuredLoggerService } from '../observability/structured-logger
 import { GlobalExceptionFilter } from './global-exception.filter';
 
 describe('GlobalExceptionFilter', () => {
+  const anyString: unknown = expect.any(String);
   const reply = jest.fn();
   const logError = jest.fn();
   const adapterHost = {
@@ -93,7 +94,7 @@ describe('GlobalExceptionFilter', () => {
         code: 'INTERNAL_ERROR',
         message: 'Internal server error',
         requestId: 'req-filter-123',
-        errorId: expect.any(String),
+        errorId: anyString,
       },
       500,
     );
@@ -119,7 +120,7 @@ describe('GlobalExceptionFilter', () => {
         code: 'INTERNAL_ERROR',
         message: 'Internal server error',
         requestId: 'req-filter-123',
-        errorId: expect.any(String),
+        errorId: anyString,
       },
       500,
     );

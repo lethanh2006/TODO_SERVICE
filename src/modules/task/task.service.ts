@@ -165,7 +165,7 @@ export class TaskService {
       this.assertValidId(id);
       const task = (await this.taskModel
         .findById(id)
-        .lean()) as unknown as Record<string, any> | null;
+        .lean()) as unknown as Record<string, unknown> | null;
       if (!task) {
         throw new NotFoundException({ message: 'Không tìm thấy công việc' });
       }
@@ -317,7 +317,7 @@ export class TaskService {
         .lean(),
       this.taskModel.countDocuments(filter),
     ]);
-    const rows = tasks as unknown as Record<string, any>[];
+    const rows = tasks as unknown as Record<string, unknown>[];
     return {
       tasks: await this.userClient.enrichTasks(rows, userPayload, requestId),
       pagination: {

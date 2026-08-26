@@ -22,7 +22,7 @@ function createHarness() {
   const taskModel = {
     countDocuments: jest.fn(),
     create: jest.fn(),
-    find: jest.fn(),
+    find: jest.fn<unknown, [Record<string, unknown>]>(),
     findById: jest.fn(),
     findByIdAndDelete: jest.fn(),
     findByIdAndUpdate: jest.fn(),
@@ -68,7 +68,7 @@ describe('TaskService', () => {
 
     const result = await service.findAll(query, 'payload', 'request-1');
 
-    const filter = taskModel.find.mock.calls[0]?.[0] as Record<string, unknown>;
+    const filter = taskModel.find.mock.calls[0]?.[0];
     expect(filter).toEqual(
       expect.objectContaining({
         status: 'todo',
