@@ -3,19 +3,19 @@ import {
   HttpException,
   Injectable,
   ServiceUnavailableException,
-} from "@nestjs/common";
-import { ConfigService } from "@nestjs/config";
-import { createHmac } from "node:crypto";
-import { StructuredLoggerService } from "../../common/observability/structured-logger.service";
-import { toError } from "../../common/utils/error.util";
+} from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
+import { createHmac } from 'node:crypto';
+import { StructuredLoggerService } from '../../common/observability/structured-logger.service';
+import { toError } from '../../common/utils/error.util';
 
 type TaskRow = Record<string, any>;
 
-const DIRECTORY_PATH = "/api/user/user/all";
+const DIRECTORY_PATH = '/api/user/user/all';
 const FORBIDDEN_INTERNAL_SECRETS = new Set([
-  "replace_with_at_least_32_random_characters",
-  "your-super-secret-key-chatapp",
-  "your_jwt_secret_here",
+  'replace_with_at_least_32_random_characters',
+  'your-super-secret-key-chatapp',
+  'your_jwt_secret_here',
 ]);
 
 @Injectable()
@@ -29,23 +29,23 @@ export class UserClientService {
     private readonly logger: StructuredLoggerService,
   ) {
     this.baseUrl = (
-      config.get<string>("USER_SERVICE_URL") ??
-      config.get<string>("USER_SERVICE") ??
-      "http://localhost:5000"
-    ).replace(/\/+$/, "");
+      config.get<string>('USER_SERVICE_URL') ??
+      config.get<string>('USER_SERVICE') ??
+      'http://localhost:5000'
+    ).replace(/\/+$/, '');
     this.timeoutMs = this.parseTimeout(
-      config.get<string | number>("USER_SERVICE_TIMEOUT_MS"),
+      config.get<string | number>('USER_SERVICE_TIMEOUT_MS'),
     );
     this.userInternalSecret = this.requireInternalSecret(
-      config.get<string>("USER_INTERNAL_SECRET"),
+      config.get<string>('USER_INTERNAL_SECRET'),
     );
   }
 
   async exists(userId: string, requestId: string): Promise<boolean> {
     const response = await this.request(
       `/api/user/internal/${encodeURIComponent(userId)}`,
-      { headers: { "x-request-id": requestId } },
-      { operation: "user_exists", requestId, allowNotFound: true },
+      { headers: { 'x-request-id': requestId } },
+      { operation: 'user_exists', requestId, allowNotFound: true },
     );
     return response.status !== 404;
   }
@@ -63,13 +63,13 @@ export class UserClientService {
         {
           headers: this.signedDirectoryHeaders(userPayload, requestId),
         },
-        { operation: "enrich_tasks", requestId },
+        { operation: 'enrich_tasks', requestId },
       );
       const payload = (await response.json()) as { users?: unknown };
       if (!Array.isArray(payload.users)) {
-        this.logger.warn("user_service_payload_invalid", {
+        this.logger.warn('user_service_payload_invalid', {
           requestId,
-          operation: "enrich_tasks",
+          operation: 'enrich_tasks',
           statusCode: 502,
         });
         return tasks;
@@ -89,9 +89,9 @@ export class UserClientService {
         assignedTo: users.get(String(task.assignedTo)) ?? task.assignedTo,
       }));
     } catch (error: unknown) {
-      this.logger.warn("user_service_enrichment_skipped", {
+      this.logger.warn('user_service_enrichment_skipped', {
         requestId,
-        operation: "enrich_tasks",
+        operation: 'enrich_tasks',
         statusCode: error instanceof HttpException ? error.getStatus() : 502,
         errorName: toError(error).name,
       });
@@ -116,21 +116,24 @@ export class UserClientService {
 
       if (response.status >= 500 || response.status === 429) {
         throw new ServiceUnavailableException({
-          message: "Dịch vụ người dùng tạm thời không khả dụng",
+          message: 'Dịch vụ người dùng tạm thời không khả dụng',
         });
       }
       if (!response.ok && !(context.allowNotFound && response.status === 404)) {
         throw new BadGatewayException({
-          message: "Phản hồi từ dịch vụ người dùng không hợp lệ",
+          message: 'Phản hồi từ dịch vụ người dùng không hợp lệ',
         });
       }
 
       return response;
     } catch (error: unknown) {
       if (error instanceof HttpException) throw error;
-      throw new ServiceUnavailableException({
-        message: "Không kết nối được dịch vụ người dùng",
-      }, { cause: toError(error) });
+      throw new ServiceUnavailableException(
+        {
+          message: 'Không kết nối được dịch vụ người dùng',
+        },
+        { cause: toError(error) },
+      );
     }
   }
 
@@ -148,7 +151,7 @@ export class UserClientService {
       Buffer.byteLength(secret) < 32 ||
       FORBIDDEN_INTERNAL_SECRETS.has(secret.toLowerCase())
     ) {
-      throw new Error("USER_INTERNAL_SECRET phải có ít nhất 32 byte");
+      throw new Error('USER_INTERNAL_SECRET phải có ít nhất 32 byte');
     }
     return secret;
   }
@@ -159,14 +162,14 @@ export class UserClientService {
   ): Record<string, string> {
     const timestamp = Date.now().toString();
     const context = `GET:${DIRECTORY_PATH}`;
-    const signature = createHmac("sha256", this.userInternalSecret)
+    const signature = createHmac('sha256', this.userInternalSecret)
       .update(`${timestamp}.${requestId}.${payload}.${context}`)
-      .digest("hex");
+      .digest('hex');
     return {
-      "x-request-id": requestId,
-      "x-user-payload": payload,
-      "x-user-timestamp": timestamp,
-      "x-user-signature": signature,
+      'x-request-id': requestId,
+      'x-user-payload': payload,
+      'x-user-timestamp': timestamp,
+      'x-user-signature': signature,
     };
   }
 }

@@ -1,12 +1,12 @@
-import { AUTHENTICATED_KEY } from "../../common/decorators/authenticated.decorator";
-import { ROLES_KEY } from "../../common/decorators/roles.decorator";
-import { MANAGEMENT_ROLES } from "../../common/enums/role.enum";
-import { TaskController } from "./task.controller";
+import { AUTHENTICATED_KEY } from '../../common/decorators/authenticated.decorator';
+import { ROLES_KEY } from '../../common/decorators/roles.decorator';
+import { MANAGEMENT_ROLES } from '../../common/enums/role.enum';
+import { TaskController } from './task.controller';
 
-describe("TaskController role contract", () => {
-  it.each(["create", "assign", "update", "getAll", "remove"] as Array<
+describe('TaskController role contract', () => {
+  it.each(['create', 'assign', 'update', 'getAll', 'remove'] as Array<
     keyof TaskController
-  >)("cho phép khối quản trị gọi %s", (methodName) => {
+  >)('cho phép khối quản trị gọi %s', (methodName) => {
     const handler = Object.getOwnPropertyDescriptor(
       TaskController.prototype,
       methodName,
@@ -15,9 +15,9 @@ describe("TaskController role contract", () => {
     expect(Reflect.getMetadata(ROLES_KEY, handler)).toEqual(MANAGEMENT_ROLES);
   });
 
-  it.each(["getMyTasks", "getOne", "updateStatus"] as Array<
+  it.each(['getMyTasks', 'getOne', 'updateStatus'] as Array<
     keyof TaskController
-  >)("yêu cầu đăng nhập khi gọi %s", (methodName) => {
+  >)('yêu cầu đăng nhập khi gọi %s', (methodName) => {
     const handler = Object.getOwnPropertyDescriptor(
       TaskController.prototype,
       methodName,

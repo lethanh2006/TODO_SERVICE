@@ -7,31 +7,31 @@ import {
   Injectable,
   NotFoundException,
   ServiceUnavailableException,
-} from "@nestjs/common";
-import { InjectModel } from "@nestjs/mongoose";
-import { isValidObjectId, type Model, type QueryFilter } from "mongoose";
+} from '@nestjs/common';
+import { InjectModel } from '@nestjs/mongoose';
+import { isValidObjectId, type Model, type QueryFilter } from 'mongoose';
 import {
   authenticatedUserId,
   type AuthenticatedUser,
-} from "../../common/interfaces/authenticated-user.interface";
-import { isManagementRole } from "../../common/enums/role.enum";
-import { toError } from "../../common/utils/error.util";
+} from '../../common/interfaces/authenticated-user.interface';
+import { isManagementRole } from '../../common/enums/role.enum';
+import { toError } from '../../common/utils/error.util';
 import {
   Task,
   type TaskDocument,
   type TaskStatus,
-} from "../../schemas/task.schema";
-import { UserClientService } from "../user-client/user-client.service";
-import { AssignTaskDto } from "./dto/assign-task.dto";
-import { CreateTaskDto } from "./dto/create-task.dto";
-import { MyTaskQueryDto, TaskQueryDto } from "./dto/task-query.dto";
-import { UpdateTaskDto } from "./dto/update-task.dto";
+} from '../../schemas/task.schema';
+import { UserClientService } from '../user-client/user-client.service';
+import { AssignTaskDto } from './dto/assign-task.dto';
+import { CreateTaskDto } from './dto/create-task.dto';
+import { MyTaskQueryDto, TaskQueryDto } from './dto/task-query.dto';
+import { UpdateTaskDto } from './dto/update-task.dto';
 
 const ASSIGNEE_TRANSITIONS: Readonly<
   Record<TaskStatus, readonly TaskStatus[]>
 > = {
-  todo: ["in_progress"],
-  in_progress: ["done"],
+  todo: ['in_progress'],
+  in_progress: ['done'],
   done: [],
   cancelled: [],
 };
@@ -39,10 +39,10 @@ const ASSIGNEE_TRANSITIONS: Readonly<
 const MANAGEMENT_TRANSITIONS: Readonly<
   Record<TaskStatus, readonly TaskStatus[]>
 > = {
-  todo: ["in_progress", "cancelled"],
-  in_progress: ["todo", "done", "cancelled"],
-  done: ["in_progress"],
-  cancelled: ["todo"],
+  todo: ['in_progress', 'cancelled'],
+  in_progress: ['todo', 'done', 'cancelled'],
+  done: ['in_progress'],
+  cancelled: ['todo'],
 };
 
 @Injectable()
@@ -57,7 +57,7 @@ export class TaskService {
       const title = dto.title.trim();
       if (!title) {
         throw new BadRequestException({
-          message: "Tiêu đề không được để trống",
+          message: 'Tiêu đề không được để trống',
         });
       }
       if (
@@ -65,7 +65,7 @@ export class TaskService {
         !(await this.userClient.exists(dto.assignedTo, requestId))
       ) {
         throw new BadRequestException({
-          message: "Người dùng được giao không tồn tại",
+          message: 'Người dùng được giao không tồn tại',
         });
       }
       const task = await this.taskModel.create({
@@ -73,9 +73,9 @@ export class TaskService {
         title,
         createdBy: authenticatedUserId(user),
       });
-      return { message: "Tạo công việc thành công", task };
+      return { message: 'Tạo công việc thành công', task };
     } catch (error) {
-      this.rethrowOrFail(error, "Lỗi khi tạo công việc");
+      this.rethrowOrFail(error, 'Lỗi khi tạo công việc');
     }
   }
 
@@ -84,24 +84,24 @@ export class TaskService {
       this.assertValidId(id);
       const task = await this.taskModel.findById(id);
       if (!task) {
-        throw new NotFoundException({ message: "Không tìm thấy công việc" });
+        throw new NotFoundException({ message: 'Không tìm thấy công việc' });
       }
-      if (task.status === "done" || task.status === "cancelled") {
+      if (task.status === 'done' || task.status === 'cancelled') {
         throw new ConflictException({
           message:
-            "Không thể giao lại công việc đã hoàn thành hoặc đã huỷ; hãy mở lại công việc trước",
+            'Không thể giao lại công việc đã hoàn thành hoặc đã huỷ; hãy mở lại công việc trước',
         });
       }
       try {
         if (!(await this.userClient.exists(dto.assignedTo, requestId))) {
           throw new BadRequestException({
-            message: "Người dùng được giao không tồn tại",
+            message: 'Người dùng được giao không tồn tại',
           });
         }
       } catch (error) {
         if (error instanceof HttpException) throw error;
         throw new ServiceUnavailableException({
-          message: "Không kết nối được dịch vụ người dùng",
+          message: 'Không kết nối được dịch vụ người dùng',
         });
       }
       const updatedTask = await this.taskModel.findOneAndUpdate(
@@ -116,12 +116,12 @@ export class TaskService {
       if (!updatedTask) {
         throw new ConflictException({
           message:
-            "Công việc đã thay đổi trạng thái hoặc người được giao; vui lòng tải lại",
+            'Công việc đã thay đổi trạng thái hoặc người được giao; vui lòng tải lại',
         });
       }
-      return { message: "Giao lại công việc thành công", task: updatedTask };
+      return { message: 'Giao lại công việc thành công', task: updatedTask };
     } catch (error) {
-      this.rethrowOrFail(error, "Lỗi khi giao lại công việc");
+      this.rethrowOrFail(error, 'Lỗi khi giao lại công việc');
     }
   }
 
@@ -133,7 +133,7 @@ export class TaskService {
     try {
       return await this.findPage(query, {}, userPayload, requestId);
     } catch (error) {
-      this.fail(error, "Lỗi khi lấy danh sách công việc");
+      this.fail(error, 'Lỗi khi lấy danh sách công việc');
     }
   }
 
@@ -151,7 +151,7 @@ export class TaskService {
         requestId,
       );
     } catch (error) {
-      this.fail(error, "Lỗi khi lấy danh sách công việc");
+      this.fail(error, 'Lỗi khi lấy danh sách công việc');
     }
   }
 
@@ -167,7 +167,7 @@ export class TaskService {
         .findById(id)
         .lean()) as unknown as Record<string, any> | null;
       if (!task) {
-        throw new NotFoundException({ message: "Không tìm thấy công việc" });
+        throw new NotFoundException({ message: 'Không tìm thấy công việc' });
       }
       this.assertCanAccess(task, user);
       const [enriched] = await this.userClient.enrichTasks(
@@ -177,7 +177,7 @@ export class TaskService {
       );
       return { task: enriched };
     } catch (error) {
-      this.rethrowOrFail(error, "Lỗi khi lấy chi tiết công việc");
+      this.rethrowOrFail(error, 'Lỗi khi lấy chi tiết công việc');
     }
   }
 
@@ -186,7 +186,7 @@ export class TaskService {
       this.assertValidId(id);
       if (!isManagementRole(user.role)) {
         throw new ForbiddenException({
-          message: "Chỉ nhóm quản trị được cập nhật nội dung công việc",
+          message: 'Chỉ nhóm quản trị được cập nhật nội dung công việc',
         });
       }
 
@@ -196,7 +196,7 @@ export class TaskService {
         const title = dto.title.trim();
         if (!title) {
           throw new BadRequestException({
-            message: "Tiêu đề không được để trống",
+            message: 'Tiêu đề không được để trống',
           });
         }
         set.title = title;
@@ -213,7 +213,7 @@ export class TaskService {
 
       if (Object.keys(set).length === 0 && Object.keys(unset).length === 0) {
         throw new BadRequestException({
-          message: "Cần cung cấp ít nhất một trường để cập nhật",
+          message: 'Cần cung cấp ít nhất một trường để cập nhật',
         });
       }
 
@@ -225,11 +225,11 @@ export class TaskService {
         runValidators: true,
       });
       if (!task) {
-        throw new NotFoundException({ message: "Không tìm thấy công việc" });
+        throw new NotFoundException({ message: 'Không tìm thấy công việc' });
       }
-      return { message: "Cập nhật công việc thành công", task };
+      return { message: 'Cập nhật công việc thành công', task };
     } catch (error) {
-      this.rethrowOrFail(error, "Lỗi khi cập nhật công việc");
+      this.rethrowOrFail(error, 'Lỗi khi cập nhật công việc');
     }
   }
 
@@ -238,11 +238,11 @@ export class TaskService {
       this.assertValidId(id);
       const task = await this.taskModel.findByIdAndDelete(id);
       if (!task) {
-        throw new NotFoundException({ message: "Không tìm thấy công việc" });
+        throw new NotFoundException({ message: 'Không tìm thấy công việc' });
       }
-      return { message: "Xoá công việc thành công" };
+      return { message: 'Xoá công việc thành công' };
     } catch (error) {
-      this.rethrowOrFail(error, "Lỗi khi xoá công việc");
+      this.rethrowOrFail(error, 'Lỗi khi xoá công việc');
     }
   }
 
@@ -251,18 +251,18 @@ export class TaskService {
       this.assertValidId(id);
       const task = await this.taskModel.findById(id);
       if (!task) {
-        throw new NotFoundException({ message: "Không tìm thấy công việc" });
+        throw new NotFoundException({ message: 'Không tìm thấy công việc' });
       }
       const currentUserId = authenticatedUserId(user);
       const assigned = this.matchesId(task.assignedTo, currentUserId);
       const canManage = isManagementRole(user.role);
       if (!assigned && !canManage) {
         throw new ForbiddenException({
-          message: "Từ chối truy cập: Không được giao công việc này",
+          message: 'Từ chối truy cập: Không được giao công việc này',
         });
       }
       if (task.status === status) {
-        return { message: "Trạng thái công việc không thay đổi", task };
+        return { message: 'Trạng thái công việc không thay đổi', task };
       }
 
       const allowedTransitions = canManage
@@ -287,15 +287,15 @@ export class TaskService {
       if (!updatedTask) {
         throw new ConflictException({
           message:
-            "Công việc đã thay đổi trạng thái hoặc người được giao; vui lòng tải lại",
+            'Công việc đã thay đổi trạng thái hoặc người được giao; vui lòng tải lại',
         });
       }
       return {
-        message: "Cập nhật trạng thái công việc thành công",
+        message: 'Cập nhật trạng thái công việc thành công',
         task: updatedTask,
       };
     } catch (error) {
-      this.rethrowOrFail(error, "Lỗi khi cập nhật trạng thái công việc");
+      this.rethrowOrFail(error, 'Lỗi khi cập nhật trạng thái công việc');
     }
   }
 
@@ -337,17 +337,17 @@ export class TaskService {
     if (query.status) filter.status = query.status;
     if (query.priority) filter.priority = query.priority;
     if (
-      "assignedTo" in query &&
+      'assignedTo' in query &&
       query.assignedTo &&
       baseFilter.assignedTo === undefined
     ) {
       filter.assignedTo = query.assignedTo;
     }
-    if ("createdBy" in query && query.createdBy) {
+    if ('createdBy' in query && query.createdBy) {
       filter.createdBy = query.createdBy;
     }
     if (query.search) {
-      const pattern = new RegExp(this.escapeRegex(query.search), "i");
+      const pattern = new RegExp(this.escapeRegex(query.search), 'i');
       filter.$or = [{ title: pattern }, { description: pattern }];
     }
     return filter;
@@ -360,26 +360,26 @@ export class TaskService {
     const assigned = this.matchesId(task.assignedTo, authenticatedUserId(user));
     if (!assigned && !isManagementRole(user.role)) {
       throw new ForbiddenException({
-        message: "Từ chối truy cập: Không được giao công việc này",
+        message: 'Từ chối truy cập: Không được giao công việc này',
       });
     }
   }
 
   private escapeRegex(value: string): string {
-    return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
   }
 
   private matchesId(value: unknown, expected: string): boolean {
-    if (typeof value === "string") return value === expected;
-    if (!value || typeof value !== "object") return false;
+    if (typeof value === 'string') return value === expected;
+    if (!value || typeof value !== 'object') return false;
     const toHexString = (value as { toHexString?: unknown }).toHexString;
-    if (typeof toHexString !== "function") return false;
+    if (typeof toHexString !== 'function') return false;
     return (toHexString as () => string).call(value) === expected;
   }
 
   private assertValidId(id: string): void {
     if (!isValidObjectId(id)) {
-      throw new BadRequestException({ message: "ID công việc không hợp lệ" });
+      throw new BadRequestException({ message: 'ID công việc không hợp lệ' });
     }
   }
 

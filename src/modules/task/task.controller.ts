@@ -9,25 +9,25 @@ import {
   Query,
   Req,
   UseGuards,
-} from "@nestjs/common";
-import { Authenticated } from "../../common/decorators/authenticated.decorator";
-import { Roles } from "../../common/decorators/roles.decorator";
-import { MANAGEMENT_ROLES } from "../../common/enums/role.enum";
-import { RolesGuard } from "../../common/guards/roles.guard";
-import type { RequestWithContext } from "../../common/interfaces/request-context.interface";
-import { AssignTaskDto } from "./dto/assign-task.dto";
-import { CreateTaskDto } from "./dto/create-task.dto";
-import { MyTaskQueryDto, TaskQueryDto } from "./dto/task-query.dto";
-import { UpdateTaskDto } from "./dto/update-task.dto";
-import { UpdateTaskStatusDto } from "./dto/update-task-status.dto";
-import { TaskService } from "./task.service";
+} from '@nestjs/common';
+import { Authenticated } from '../../common/decorators/authenticated.decorator';
+import { Roles } from '../../common/decorators/roles.decorator';
+import { MANAGEMENT_ROLES } from '../../common/enums/role.enum';
+import { RolesGuard } from '../../common/guards/roles.guard';
+import type { RequestWithContext } from '../../common/interfaces/request-context.interface';
+import { AssignTaskDto } from './dto/assign-task.dto';
+import { CreateTaskDto } from './dto/create-task.dto';
+import { MyTaskQueryDto, TaskQueryDto } from './dto/task-query.dto';
+import { UpdateTaskDto } from './dto/update-task.dto';
+import { UpdateTaskStatusDto } from './dto/update-task-status.dto';
+import { TaskService } from './task.service';
 
-@Controller("api/todo")
+@Controller('api/todo')
 @UseGuards(RolesGuard)
 export class TaskController {
   constructor(private readonly taskService: TaskService) {}
 
-  @Get("my-tasks")
+  @Get('my-tasks')
   @Authenticated()
   getMyTasks(
     @Query() query: MyTaskQueryDto,
@@ -41,10 +41,10 @@ export class TaskController {
     );
   }
 
-  @Patch(":id/status")
+  @Patch(':id/status')
   @Authenticated()
   updateStatus(
-    @Param("id") id: string,
+    @Param('id') id: string,
     @Body() body: UpdateTaskStatusDto,
     @Req() request: RequestWithContext,
   ) {
@@ -61,20 +61,20 @@ export class TaskController {
     );
   }
 
-  @Patch(":id/assign")
+  @Patch(':id/assign')
   @Roles(...MANAGEMENT_ROLES)
   assign(
-    @Param("id") id: string,
+    @Param('id') id: string,
     @Body() body: AssignTaskDto,
     @Req() request: RequestWithContext,
   ) {
     return this.taskService.assign(id, body, this.requestId(request));
   }
 
-  @Patch(":id")
+  @Patch(':id')
   @Roles(...MANAGEMENT_ROLES)
   update(
-    @Param("id") id: string,
+    @Param('id') id: string,
     @Body() body: UpdateTaskDto,
     @Req() request: RequestWithContext,
   ) {
@@ -91,9 +91,9 @@ export class TaskController {
     );
   }
 
-  @Get(":id")
+  @Get(':id')
   @Authenticated()
-  getOne(@Param("id") id: string, @Req() request: RequestWithContext) {
+  getOne(@Param('id') id: string, @Req() request: RequestWithContext) {
     return this.taskService.findOne(
       id,
       request.user!,
@@ -102,18 +102,18 @@ export class TaskController {
     );
   }
 
-  @Delete(":id")
+  @Delete(':id')
   @Roles(...MANAGEMENT_ROLES)
-  remove(@Param("id") id: string) {
+  remove(@Param('id') id: string) {
     return this.taskService.remove(id);
   }
 
   private requestId(request: RequestWithContext): string {
-    return request.requestContext?.requestId ?? "";
+    return request.requestContext?.requestId ?? '';
   }
 
   private userPayload(request: RequestWithContext): string | undefined {
-    const value = request.headers["x-user-payload"];
-    return typeof value === "string" ? value : undefined;
+    const value = request.headers['x-user-payload'];
+    return typeof value === 'string' ? value : undefined;
   }
 }
