@@ -38,3 +38,6 @@ export class Task {
 }
 
 export const TaskSchema = SchemaFactory.createForClass(Task);
+
+TaskSchema.index({ assignedTo: 1, createdAt: -1, _id: -1 });
+TaskSchema.index({ createdBy: 1, createdAt: -1, _id: -1 });

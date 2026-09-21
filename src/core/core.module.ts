@@ -1,10 +1,12 @@
 import { Global, MiddlewareConsumer, Module, NestModule } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { APP_FILTER } from '@nestjs/core';
-import { GlobalExceptionFilter } from '../common/global-exception.filter';
-import { RequestIdMiddleware } from '../common/request-id.middleware';
-import { StructuredLoggerService } from '../common/observability/structured-logger.service';
-import { TelemetryLifecycleService } from '../common/observability/telemetry-lifecycle.service';
+import { GlobalExceptionFilter } from '../common/filters/global-exception.filter';
+import { RequestIdMiddleware } from '../common/middleware/request-id.middleware';
+import {
+  LoggerLifecycleService,
+  StructuredLoggerService,
+} from '../common/logging/logger';
 import { GatewaySignatureService } from '../common/security/gateway-signature.service';
 
 @Global()
@@ -13,7 +15,7 @@ import { GatewaySignatureService } from '../common/security/gateway-signature.se
   providers: [
     StructuredLoggerService,
     GatewaySignatureService,
-    TelemetryLifecycleService,
+    LoggerLifecycleService,
     { provide: APP_FILTER, useClass: GlobalExceptionFilter },
   ],
   exports: [StructuredLoggerService, GatewaySignatureService],

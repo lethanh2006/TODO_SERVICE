@@ -4,13 +4,14 @@ import {
 } from '@nestjs/common';
 import type { ConfigService } from '@nestjs/config';
 import { createHmac } from 'node:crypto';
-import type { StructuredLoggerService } from '../../common/observability/structured-logger.service';
+import type { StructuredLoggerService } from '../../common/logging/logger';
 import { UserClientService } from './user-client.service';
 
 describe('UserClientService', () => {
+  const employeeId = '507f1f77bcf86cd799439012';
   const anyAbortSignal: unknown = expect.any(AbortSignal);
   const assignedUser: unknown = expect.objectContaining({
-    _id: 'employee-id',
+    _id: employeeId,
     username: 'Nguyễn An',
   });
   const userInternalSecret = '0123456789abcdef0123456789abcdef';
@@ -114,14 +115,14 @@ describe('UserClientService', () => {
       ok: true,
       status: 200,
       json: jest.fn().mockResolvedValue({
-        users: [{ _id: 'employee-id', username: 'Nguyễn An' }],
+        users: [{ _id: employeeId, username: 'Nguyễn An' }],
       }),
     });
     const service = new UserClientService(config, logger);
 
     await expect(
       service.enrichTasks(
-        [{ _id: 'task-id', assignedTo: 'employee-id' }],
+        [{ _id: 'task-id', assignedTo: employeeId, createdBy: employeeId }],
         userPayload,
         'req-directory',
       ),
@@ -133,13 +134,16 @@ describe('UserClientService', () => {
 
     const expectedSignature = createHmac('sha256', userInternalSecret)
       .update(
-        `${timestamp}.req-directory.${userPayload}.GET:/api/user/user/all`,
+        `${timestamp}.req-directory.${userPayload}.POST:/api/user/internal/directory-batch`,
       )
       .digest('hex');
     expect(fetchMock).toHaveBeenCalledWith(
-      'http://user:5000/api/user/user/all',
+      'http://user:5000/api/user/internal/directory-batch',
       expect.objectContaining({
+        method: 'POST',
+        body: JSON.stringify({ ids: [employeeId] }),
         headers: {
+          'content-type': 'application/json',
           'x-request-id': 'req-directory',
           'x-user-payload': userPayload,
           'x-user-timestamp': String(timestamp),

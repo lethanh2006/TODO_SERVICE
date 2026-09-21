@@ -9,8 +9,8 @@ import {
   handleOriginHttpException,
   type HttpBoundaryContext,
 } from '@nrapp/observability';
-import type { RequestWithContext } from './request-context';
-import type { StructuredLoggerService } from './observability/structured-logger.service';
+import type { RequestWithContext } from '../interfaces/request-context.interface';
+import type { StructuredLoggerService } from '../logging/logger';
 import { GlobalExceptionFilter } from './global-exception.filter';
 
 describe('GlobalExceptionFilter', () => {

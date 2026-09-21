@@ -10,11 +10,9 @@ import {
 } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { isValidObjectId, type Model, type QueryFilter } from 'mongoose';
-import {
-  authenticatedUserId,
-  type AuthenticatedUser,
-  isManagementRole,
-} from '../../common/auth';
+import { authenticatedUserId } from '../../common/utils/authenticated-user.util';
+import { type AuthenticatedUser } from '../../common/interfaces/authenticated-user.interface';
+import { isManagementRole } from '../../common/utils/role.util';
 import { toError } from '../../common/utils/error.util';
 import {
   Task,

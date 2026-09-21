@@ -6,7 +6,8 @@ import {
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { createHmac } from 'node:crypto';
-import { StructuredLoggerService } from '../../common/observability/structured-logger.service';
+import { Types } from 'mongoose';
+import { StructuredLoggerService } from '../../common/logging/logger';
 import { toError } from '../../common/utils/error.util';
 
 type TaskRow = Record<string, unknown>;
@@ -21,7 +22,7 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
-const DIRECTORY_PATH = '/api/user/user/all';
+const DIRECTORY_PATH = '/api/user/internal/directory-batch';
 const FORBIDDEN_INTERNAL_SECRETS = new Set([
   'replace_with_at_least_32_random_characters',
   'your-super-secret-key-chatapp',
@@ -67,32 +68,55 @@ export class UserClientService {
   ): Promise<TaskRow[]> {
     if (tasks.length === 0 || !userPayload) return tasks;
 
+    const ids = [
+      ...new Set(
+        tasks
+          .flatMap((task) => [task.createdBy, task.assignedTo])
+          .flatMap((value) =>
+            typeof value === 'string'
+              ? [value]
+              : value instanceof Types.ObjectId
+                ? [value.toHexString()]
+                : [],
+          )
+          .filter((id) => /^[a-f0-9]{24}$/i.test(id)),
+      ),
+    ];
+    if (!ids.length) return tasks;
+
     try {
-      const response = await this.request(
-        DIRECTORY_PATH,
-        {
-          headers: this.signedDirectoryHeaders(userPayload, requestId),
-        },
-        { operation: 'enrich_tasks', requestId },
-      );
-      const payload = (await response.json()) as { users?: unknown };
-      if (!Array.isArray(payload.users)) {
-        this.logger.warn('user_service_payload_invalid', {
-          requestId,
-          operation: 'enrich_tasks',
-          statusCode: 502,
-        });
-        return tasks;
-      }
       const users = new Map<string, DirectoryUser>();
-      for (const raw of payload.users) {
-        if (!isRecord(raw)) continue;
-        const user = {
-          _id: raw._id,
-          username: raw.username,
-          email: raw.email,
-        };
-        users.set(String(user._id), user);
+      for (let offset = 0; offset < ids.length; offset += 100) {
+        const response = await this.request(
+          DIRECTORY_PATH,
+          {
+            method: 'POST',
+            body: JSON.stringify({ ids: ids.slice(offset, offset + 100) }),
+            headers: {
+              ...this.signedDirectoryHeaders(userPayload, requestId),
+              'content-type': 'application/json',
+            },
+          },
+          { operation: 'enrich_tasks', requestId },
+        );
+        const payload = (await response.json()) as { users?: unknown };
+        if (!Array.isArray(payload.users)) {
+          this.logger.warn('user_service_payload_invalid', {
+            requestId,
+            operation: 'enrich_tasks',
+            statusCode: 502,
+          });
+          return tasks;
+        }
+        for (const raw of payload.users) {
+          if (!isRecord(raw)) continue;
+          const user = {
+            _id: raw._id,
+            username: raw.username,
+            email: raw.email,
+          };
+          users.set(String(user._id), user);
+        }
       }
       return tasks.map((task) => ({
         ...task,
@@ -172,7 +196,7 @@ export class UserClientService {
     requestId: string,
   ): Record<string, string> {
     const timestamp = Date.now().toString();
-    const context = `GET:${DIRECTORY_PATH}`;
+    const context = `POST:${DIRECTORY_PATH}`;
     const signature = createHmac('sha256', this.userInternalSecret)
       .update(`${timestamp}.${requestId}.${payload}.${context}`)
       .digest('hex');

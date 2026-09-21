@@ -1,6 +1,11 @@
-import { Injectable, UnauthorizedException } from '@nestjs/common';
+import {
+  Injectable,
+  ServiceUnavailableException,
+  UnauthorizedException,
+} from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { createHmac, timingSafeEqual } from 'node:crypto';
+import { ReplayWindow, ReplayWindowFull } from './replay-window';
 
 const FORBIDDEN_SECRETS = new Set([
   'replace_with_at_least_32_random_characters',
@@ -20,7 +25,7 @@ interface SignedGatewayHeaders {
 export class GatewaySignatureService {
   private readonly maxAgeMs: number;
   private readonly secret: string;
-  private readonly acceptedSignatures = new Map<string, number>();
+  private readonly acceptedSignatures = new ReplayWindow();
 
   constructor(configService: ConfigService) {
     const secret = configService.get<string>('TODO_INTERNAL_SECRET')?.trim();
@@ -48,7 +53,6 @@ export class GatewaySignatureService {
     }
 
     const now = Date.now();
-    this.removeExpiredSignatures(now);
     const timestampNumber = Number(timestamp);
     if (
       !Number.isSafeInteger(timestampNumber) ||
@@ -69,15 +73,22 @@ export class GatewaySignatureService {
     ) {
       throw new UnauthorizedException('Chữ ký Gateway không hợp lệ');
     }
-    if (this.acceptedSignatures.has(signature)) {
-      throw new UnauthorizedException('Yêu cầu Gateway đã được sử dụng');
-    }
-    this.acceptedSignatures.set(signature, timestampNumber + this.maxAgeMs);
-  }
-
-  private removeExpiredSignatures(now: number): void {
-    for (const [signature, expiresAt] of this.acceptedSignatures) {
-      if (expiresAt <= now) this.acceptedSignatures.delete(signature);
+    try {
+      if (
+        !this.acceptedSignatures.remember(
+          signature,
+          timestampNumber + this.maxAgeMs,
+          now,
+        )
+      ) {
+        throw new UnauthorizedException('Yêu cầu Gateway đã được sử dụng');
+      }
+    } catch (error: unknown) {
+      if (error instanceof ReplayWindowFull)
+        throw new ServiceUnavailableException(
+          'Bộ kiểm tra Gateway đang quá tải',
+        );
+      throw error;
     }
   }
 }

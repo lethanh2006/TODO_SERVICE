@@ -1,4 +1,4 @@
-import { isManagementRole } from './auth';
+import { isManagementRole } from './role.util';
 
 describe('isManagementRole', () => {
   it.each(['admin', 'manager', 'chef', 'ADMIN'])(

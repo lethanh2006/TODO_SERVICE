@@ -1,14 +1,9 @@
-import '@nrapp/observability/register';
-
 import dns from 'node:dns';
-import {
-  flushLoggerAndShutdownTelemetry,
-  logAndRecordException,
-} from '@nrapp/observability';
+import { flushLogger, logException } from '@nrapp/observability';
 import { ValidationPipe } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module';
-import { appLogger, nestLogger } from './common/observability/app-logger';
+import { appLogger, nestLogger } from './common/logging/logger';
 
 dns.setServers(['8.8.8.8', '8.8.4.4']);
 
@@ -21,7 +16,7 @@ async function bootstrap(): Promise<void> {
 }
 
 void bootstrap().catch(async (error: unknown) => {
-  logAndRecordException(
+  logException(
     appLogger,
     'process.bootstrap.failed',
     error,
@@ -37,6 +32,6 @@ void bootstrap().catch(async (error: unknown) => {
       },
     },
   );
-  await flushLoggerAndShutdownTelemetry(appLogger, 3_000);
+  await flushLogger(appLogger);
   process.exitCode = 1;
 });
