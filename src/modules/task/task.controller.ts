@@ -10,11 +10,9 @@ import {
   Req,
   UseGuards,
 } from '@nestjs/common';
-import { Authenticated } from '../../common/decorators/authenticated.decorator';
-import { Roles } from '../../common/decorators/roles.decorator';
-import { MANAGEMENT_ROLES } from '../../common/enums/role.enum';
-import { RolesGuard } from '../../common/guards/roles.guard';
-import type { RequestWithContext } from '../../common/interfaces/request-context.interface';
+import { Authenticated, MANAGEMENT_ROLES, Roles } from '../../common/auth';
+import type { RequestWithContext } from '../../common/request-context';
+import { RolesGuard } from '../../common/roles.guard';
 import { AssignTaskDto } from './dto/assign-task.dto';
 import { CreateTaskDto } from './dto/create-task.dto';
 import { MyTaskQueryDto, TaskQueryDto } from './dto/task-query.dto';

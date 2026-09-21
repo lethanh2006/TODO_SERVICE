@@ -13,8 +13,8 @@ import { isValidObjectId, type Model, type QueryFilter } from 'mongoose';
 import {
   authenticatedUserId,
   type AuthenticatedUser,
-} from '../../common/interfaces/authenticated-user.interface';
-import { isManagementRole } from '../../common/enums/role.enum';
+  isManagementRole,
+} from '../../common/auth';
 import { toError } from '../../common/utils/error.util';
 import {
   Task,

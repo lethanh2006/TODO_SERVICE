@@ -1,6 +1,8 @@
-import { AUTHENTICATED_KEY } from '../../common/decorators/authenticated.decorator';
-import { ROLES_KEY } from '../../common/decorators/roles.decorator';
-import { MANAGEMENT_ROLES } from '../../common/enums/role.enum';
+import {
+  AUTHENTICATED_KEY,
+  MANAGEMENT_ROLES,
+  ROLES_KEY,
+} from '../../common/auth';
 import { TaskController } from './task.controller';
 
 describe('TaskController role contract', () => {

@@ -1,4 +1,4 @@
-import { isManagementRole } from './role.enum';
+import { isManagementRole } from './auth';
 
 describe('isManagementRole', () => {
   it.each(['admin', 'manager', 'chef', 'ADMIN'])(
