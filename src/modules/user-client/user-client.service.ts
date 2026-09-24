@@ -5,7 +5,7 @@ import {
   ServiceUnavailableException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { createHmac } from 'node:crypto';
+import { createHash, createHmac } from 'node:crypto';
 import { Types } from 'mongoose';
 import { StructuredLoggerService } from '../../common/logging/logger';
 import { toError } from '../../common/utils/error.util';
@@ -34,6 +34,10 @@ export class UserClientService {
   private readonly baseUrl: string;
   private readonly timeoutMs: number;
   private readonly userInternalSecret: string;
+  private readonly pendingDirectoryReads = new Map<
+    string,
+    Promise<Map<string, DirectoryUser>>
+  >();
 
   constructor(
     config: ConfigService,
@@ -83,41 +87,10 @@ export class UserClientService {
       ),
     ];
     if (!ids.length) return tasks;
+    ids.sort();
 
     try {
-      const users = new Map<string, DirectoryUser>();
-      for (let offset = 0; offset < ids.length; offset += 100) {
-        const response = await this.request(
-          DIRECTORY_PATH,
-          {
-            method: 'POST',
-            body: JSON.stringify({ ids: ids.slice(offset, offset + 100) }),
-            headers: {
-              ...this.signedDirectoryHeaders(userPayload, requestId),
-              'content-type': 'application/json',
-            },
-          },
-          { operation: 'enrich_tasks', requestId },
-        );
-        const payload = (await response.json()) as { users?: unknown };
-        if (!Array.isArray(payload.users)) {
-          this.logger.warn('user_service_payload_invalid', {
-            requestId,
-            operation: 'enrich_tasks',
-            statusCode: 502,
-          });
-          return tasks;
-        }
-        for (const raw of payload.users) {
-          if (!isRecord(raw)) continue;
-          const user = {
-            _id: raw._id,
-            username: raw.username,
-            email: raw.email,
-          };
-          users.set(String(user._id), user);
-        }
-      }
+      const users = await this.getDirectoryUsers(ids, userPayload, requestId);
       return tasks.map((task) => ({
         ...task,
         createdBy: users.get(String(task.createdBy)) ?? task.createdBy,
@@ -132,6 +105,75 @@ export class UserClientService {
       });
       return tasks;
     }
+  }
+
+  private async getDirectoryUsers(
+    ids: string[],
+    userPayload: string,
+    requestId: string,
+  ): Promise<Map<string, DirectoryUser>> {
+    const key = createHash('sha256')
+      .update(userPayload)
+      .update('\0')
+      .update(ids.join('\0'))
+      .digest('hex');
+    const existing = this.pendingDirectoryReads.get(key);
+    if (existing) return existing;
+
+    const pending = this.loadDirectoryUsers(ids, userPayload, requestId);
+    if (this.pendingDirectoryReads.size < 256) {
+      this.pendingDirectoryReads.set(key, pending);
+    }
+    try {
+      return await pending;
+    } finally {
+      if (this.pendingDirectoryReads.get(key) === pending) {
+        this.pendingDirectoryReads.delete(key);
+      }
+    }
+  }
+
+  private async loadDirectoryUsers(
+    ids: string[],
+    userPayload: string,
+    requestId: string,
+  ): Promise<Map<string, DirectoryUser>> {
+    const users = new Map<string, DirectoryUser>();
+    for (let offset = 0; offset < ids.length; offset += 100) {
+      const response = await this.request(
+        DIRECTORY_PATH,
+        {
+          method: 'POST',
+          body: JSON.stringify({ ids: ids.slice(offset, offset + 100) }),
+          headers: {
+            ...this.signedDirectoryHeaders(userPayload, requestId),
+            'content-type': 'application/json',
+          },
+        },
+        { operation: 'enrich_tasks', requestId },
+      );
+      const payload = (await response.json()) as { users?: unknown };
+      if (!Array.isArray(payload.users)) {
+        this.logger.warn('user_service_payload_invalid', {
+          requestId,
+          operation: 'enrich_tasks',
+          statusCode: 502,
+        });
+        throw new BadGatewayException({
+          message: 'Phản hồi danh sách người dùng không hợp lệ',
+        });
+      }
+      for (const raw of payload.users) {
+        if (!isRecord(raw)) continue;
+        const user = {
+          _id: raw._id,
+          username: raw.username,
+          email: raw.email,
+        };
+        users.set(String(user._id), user);
+      }
+    }
+    return users;
   }
 
   private async request(

@@ -45,6 +45,10 @@ describe('TaskService', () => {
     jest.clearAllMocks();
   });
 
+  afterEach(() => {
+    jest.restoreAllMocks();
+  });
+
   it('lọc, phân trang và escape ký tự regex cho danh sách quản trị', async () => {
     const { service, taskModel, userClient } = createHarness();
     const lean = jest.fn().mockResolvedValue([{ _id: TASK_ID }]);
@@ -120,6 +124,90 @@ describe('TaskService', () => {
     );
 
     expect(taskModel.find).toHaveBeenCalledWith({ assignedTo: USER_ID });
+  });
+
+  it('bỏ countDocuments khi trang đầu trả ít hơn giới hạn trang', async () => {
+    const { service, taskModel, userClient } = createHarness();
+    const rows = [{ _id: TASK_ID }];
+    const lean = jest.fn().mockResolvedValue(rows);
+    const limit = jest.fn().mockReturnValue({ lean });
+    const skip = jest.fn().mockReturnValue({ limit });
+    const sort = jest.fn().mockReturnValue({ skip });
+    taskModel.find.mockReturnValue({ sort });
+    userClient.enrichTasks.mockResolvedValue(rows);
+
+    const query: MyTaskQueryDto = { page: 1, limit: 20 };
+    const result = await service.findMine(
+      { _id: USER_ID, role: 'user' },
+      query,
+      'payload',
+      'request-optimized',
+    );
+
+    expect(taskModel.countDocuments).not.toHaveBeenCalled();
+    expect(result.pagination).toEqual({
+      page: 1,
+      limit: 20,
+      total: 1,
+      totalPages: 1,
+    });
+    expect(userClient.enrichTasks).toHaveBeenCalledWith(
+      rows,
+      'payload',
+      'request-optimized',
+    );
+  });
+
+  it('gộp lượt đọc đồng thời, cache 500 ms và vô hiệu hóa sau khi ghi', async () => {
+    const { service, taskModel, userClient } = createHarness();
+    const rows = [{ _id: TASK_ID }];
+    let resolveRows!: (value: typeof rows) => void;
+    const pendingRows = new Promise<typeof rows>((resolve) => {
+      resolveRows = resolve;
+    });
+    const lean = jest.fn().mockReturnValue(pendingRows);
+    const limit = jest.fn().mockReturnValue({ lean });
+    const skip = jest.fn().mockReturnValue({ limit });
+    const sort = jest.fn().mockReturnValue({ skip });
+    taskModel.find.mockReturnValue({ sort });
+    userClient.enrichTasks.mockResolvedValue(rows);
+    const query: MyTaskQueryDto = { page: 1, limit: 20 };
+    const user = { _id: USER_ID, role: 'user' };
+    const now = jest.spyOn(Date, 'now').mockReturnValue(1_000);
+
+    const first = service.findMine(user, query, 'payload', 'request-first');
+    const concurrent = service.findMine(
+      user,
+      query,
+      'payload',
+      'request-concurrent',
+    );
+
+    expect(taskModel.find).toHaveBeenCalledTimes(1);
+    resolveRows(rows);
+    const [firstResult, concurrentResult] = await Promise.all([
+      first,
+      concurrent,
+    ]);
+
+    expect(firstResult).toEqual(concurrentResult);
+    expect(userClient.enrichTasks).toHaveBeenCalledTimes(1);
+    expect(userClient.enrichTasks).toHaveBeenCalledWith(
+      rows,
+      'payload',
+      'request-first',
+    );
+
+    await service.findMine(user, query, 'payload', 'request-after-completion');
+    expect(taskModel.find).toHaveBeenCalledTimes(1);
+    now.mockReturnValue(6_000);
+    await service.findMine(user, query, 'payload', 'request-after-expiration');
+    expect(taskModel.find).toHaveBeenCalledTimes(2);
+
+    taskModel.create.mockResolvedValue({ _id: 'new-task' });
+    await service.create({ title: 'new task' }, user, 'request-create');
+    await service.findMine(user, query, 'payload', 'request-after-write');
+    expect(taskModel.find).toHaveBeenCalledTimes(3);
   });
 
   it('DTO danh sách cá nhân loại bỏ bộ lọc chỉ dành cho quản trị', async () => {

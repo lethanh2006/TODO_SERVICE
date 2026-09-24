@@ -43,8 +43,30 @@ const MANAGEMENT_TRANSITIONS: Readonly<
   cancelled: ['todo'],
 };
 
+type TaskPageResult = {
+  tasks: Record<string, unknown>[];
+  pagination: {
+    page: number;
+    limit: number;
+    total: number;
+    totalPages: number;
+  };
+};
+
+const MY_TASK_CACHE_TTL_MS = 5_000;
+
 @Injectable()
 export class TaskService {
+  private readonly pendingMineReads = new Map<
+    string,
+    Promise<TaskPageResult>
+  >();
+  private readonly completedMineReads = new Map<
+    string,
+    { expiresAt: number; value: TaskPageResult }
+  >();
+  private mineReadGeneration = 0;
+
   constructor(
     @InjectModel(Task.name) private readonly taskModel: Model<TaskDocument>,
     private readonly userClient: UserClientService,
@@ -71,6 +93,7 @@ export class TaskService {
         title,
         createdBy: authenticatedUserId(user),
       });
+      this.invalidateMineReads();
       return { message: 'Tạo công việc thành công', task };
     } catch (error) {
       this.rethrowOrFail(error, 'Lỗi khi tạo công việc');
@@ -117,6 +140,7 @@ export class TaskService {
             'Công việc đã thay đổi trạng thái hoặc người được giao; vui lòng tải lại',
         });
       }
+      this.invalidateMineReads();
       return { message: 'Giao lại công việc thành công', task: updatedTask };
     } catch (error) {
       this.rethrowOrFail(error, 'Lỗi khi giao lại công việc');
@@ -142,9 +166,23 @@ export class TaskService {
     requestId: string,
   ) {
     try {
-      return await this.findPage(
+      const userId = authenticatedUserId(user);
+      const generation = this.mineReadGeneration;
+      const key = JSON.stringify([
+        generation,
+        userId,
+        user.role?.toLowerCase() ?? '',
+        query.page ?? 1,
+        query.limit ?? 20,
+        query.status ?? null,
+        query.priority ?? null,
+        query.search?.trim() || null,
+      ]);
+      return await this.findMinePage(
+        key,
+        generation,
         query,
-        { assignedTo: authenticatedUserId(user) },
+        { assignedTo: userId },
         userPayload,
         requestId,
       );
@@ -225,6 +263,7 @@ export class TaskService {
       if (!task) {
         throw new NotFoundException({ message: 'Không tìm thấy công việc' });
       }
+      this.invalidateMineReads();
       return { message: 'Cập nhật công việc thành công', task };
     } catch (error) {
       this.rethrowOrFail(error, 'Lỗi khi cập nhật công việc');
@@ -238,6 +277,7 @@ export class TaskService {
       if (!task) {
         throw new NotFoundException({ message: 'Không tìm thấy công việc' });
       }
+      this.invalidateMineReads();
       return { message: 'Xoá công việc thành công' };
     } catch (error) {
       this.rethrowOrFail(error, 'Lỗi khi xoá công việc');
@@ -288,6 +328,7 @@ export class TaskService {
             'Công việc đã thay đổi trạng thái hoặc người được giao; vui lòng tải lại',
         });
       }
+      this.invalidateMineReads();
       return {
         message: 'Cập nhật trạng thái công việc thành công',
         task: updatedTask,
@@ -302,22 +343,24 @@ export class TaskService {
     baseFilter: QueryFilter<TaskDocument>,
     userPayload: string | undefined,
     requestId: string,
-  ) {
+  ): Promise<TaskPageResult> {
     const page = query.page ?? 1;
     const limit = query.limit ?? 20;
     const filter = this.buildFilter(query, baseFilter);
-    const [tasks, total] = await Promise.all([
-      this.taskModel
-        .find(filter)
-        .sort({ createdAt: -1, _id: -1 })
-        .skip((page - 1) * limit)
-        .limit(limit)
-        .lean(),
-      this.taskModel.countDocuments(filter),
-    ]);
-    const rows = tasks as unknown as Record<string, unknown>[];
+    const tasks = (await this.taskModel
+      .find(filter)
+      .sort({ createdAt: -1, _id: -1 })
+      .skip((page - 1) * limit)
+      .limit(limit)
+      .lean()) as unknown as Record<string, unknown>[];
+    // On the first page, fewer rows than the page limit proves there are no
+    // later matches. Avoid a second Atlas round trip for this common case.
+    const total =
+      page === 1 && tasks.length < limit
+        ? tasks.length
+        : await this.taskModel.countDocuments(filter);
     return {
-      tasks: await this.userClient.enrichTasks(rows, userPayload, requestId),
+      tasks: await this.userClient.enrichTasks(tasks, userPayload, requestId),
       pagination: {
         page,
         limit,
@@ -325,6 +368,58 @@ export class TaskService {
         totalPages: Math.ceil(total / limit),
       },
     };
+  }
+
+  private async findMinePage(
+    key: string,
+    generation: number,
+    query: MyTaskQueryDto,
+    baseFilter: QueryFilter<TaskDocument>,
+    userPayload: string | undefined,
+    requestId: string,
+  ): Promise<TaskPageResult> {
+    const cached = this.completedMineReads.get(key);
+    if (cached && cached.expiresAt > Date.now()) return cached.value;
+    if (cached) this.completedMineReads.delete(key);
+
+    const pending = this.pendingMineReads.get(key);
+    if (pending) return pending;
+    if (this.pendingMineReads.size >= 128) {
+      return this.findPage(query, baseFilter, userPayload, requestId);
+    }
+
+    const read = this.findPage(query, baseFilter, userPayload, requestId);
+    this.pendingMineReads.set(key, read);
+    try {
+      const value = await read;
+      if (generation === this.mineReadGeneration) {
+        this.rememberMineRead(key, value);
+      }
+      return value;
+    } finally {
+      if (this.pendingMineReads.get(key) === read) {
+        this.pendingMineReads.delete(key);
+      }
+    }
+  }
+
+  private rememberMineRead(key: string, value: TaskPageResult): void {
+    if (this.completedMineReads.size >= 256) {
+      const oldestKey: string | undefined = Array.from(
+        this.completedMineReads.keys(),
+      )[0];
+      if (oldestKey !== undefined) this.completedMineReads.delete(oldestKey);
+    }
+    this.completedMineReads.set(key, {
+      expiresAt: Date.now() + MY_TASK_CACHE_TTL_MS,
+      value,
+    });
+  }
+
+  private invalidateMineReads(): void {
+    // Writes in this single service replica invalidate the cached task views.
+    this.mineReadGeneration += 1;
+    this.completedMineReads.clear();
   }
 
   private buildFilter(

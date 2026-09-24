@@ -153,6 +153,56 @@ describe('UserClientService', () => {
     );
   });
 
+  it('coalesces overlapping directory reads for the same signed viewer only', async () => {
+    const timestamp = 1_700_000_000_000;
+    const managerPayload = Buffer.from(
+      JSON.stringify({ _id: 'manager-id', role: 'manager' }),
+    ).toString('base64');
+    const adminPayload = Buffer.from(
+      JSON.stringify({ _id: 'admin-id', role: 'admin' }),
+    ).toString('base64');
+    const responses: Array<(value: unknown) => void> = [];
+    jest.spyOn(Date, 'now').mockReturnValue(timestamp);
+    fetchMock.mockImplementation(
+      () => new Promise((resolve) => responses.push(resolve)),
+    );
+    const service = new UserClientService(config, logger);
+    const tasks = [
+      { _id: 'task-id', assignedTo: employeeId, createdBy: employeeId },
+    ];
+
+    const managerRead1 = service.enrichTasks(
+      tasks,
+      managerPayload,
+      'req-manager-1',
+    );
+    const managerRead2 = service.enrichTasks(
+      tasks,
+      managerPayload,
+      'req-manager-2',
+    );
+    const adminRead = service.enrichTasks(tasks, adminPayload, 'req-admin');
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+
+    const response = {
+      ok: true,
+      status: 200,
+      json: jest.fn().mockResolvedValue({
+        users: [{ _id: employeeId, username: 'Nguyễn An' }],
+      }),
+    };
+    responses[0](response);
+    responses[1](response);
+    await expect(
+      Promise.all([managerRead1, managerRead2, adminRead]),
+    ).resolves.toHaveLength(3);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+
+    fetchMock.mockResolvedValue(response);
+    await service.enrichTasks(tasks, managerPayload, 'req-manager-3');
+    expect(fetchMock).toHaveBeenCalledTimes(3);
+  });
+
   it('dừng khởi động khi secret gọi User không an toàn', () => {
     const unsafeConfig = {
       get: jest.fn((key: string) =>
