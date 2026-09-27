@@ -343,6 +343,7 @@ export class TaskService {
     baseFilter: QueryFilter<TaskDocument>,
     userPayload: string | undefined,
     requestId: string,
+    enrichUsers = true,
   ): Promise<TaskPageResult> {
     const page = query.page ?? 1;
     const limit = query.limit ?? 20;
@@ -360,7 +361,13 @@ export class TaskService {
         ? tasks.length
         : await this.taskModel.countDocuments(filter);
     return {
-      tasks: await this.userClient.enrichTasks(tasks, userPayload, requestId),
+      // The employee web only needs task fields on /my-tasks. Skipping the
+      // User Service round trip keeps this critical list available even when
+      // that downstream service is slow. Management lists still opt in to
+      // assignee/creator enrichment through the default value above.
+      tasks: enrichUsers
+        ? await this.userClient.enrichTasks(tasks, userPayload, requestId)
+        : tasks,
       pagination: {
         page,
         limit,
@@ -385,10 +392,16 @@ export class TaskService {
     const pending = this.pendingMineReads.get(key);
     if (pending) return pending;
     if (this.pendingMineReads.size >= 128) {
-      return this.findPage(query, baseFilter, userPayload, requestId);
+      return this.findPage(query, baseFilter, userPayload, requestId, false);
     }
 
-    const read = this.findPage(query, baseFilter, userPayload, requestId);
+    const read = this.findPage(
+      query,
+      baseFilter,
+      userPayload,
+      requestId,
+      false,
+    );
     this.pendingMineReads.set(key, read);
     try {
       const value = await read;

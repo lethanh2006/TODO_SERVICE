@@ -151,14 +151,11 @@ describe('TaskService', () => {
       total: 1,
       totalPages: 1,
     });
-    expect(userClient.enrichTasks).toHaveBeenCalledWith(
-      rows,
-      'payload',
-      'request-optimized',
-    );
+    expect(result.tasks).toEqual(rows);
+    expect(userClient.enrichTasks).not.toHaveBeenCalled();
   });
 
-  it('gộp lượt đọc đồng thời, cache 500 ms và vô hiệu hóa sau khi ghi', async () => {
+  it('gộp lượt đọc đồng thời, cache 5 giây và vô hiệu hóa sau khi ghi', async () => {
     const { service, taskModel, userClient } = createHarness();
     const rows = [{ _id: TASK_ID }];
     let resolveRows!: (value: typeof rows) => void;
@@ -191,12 +188,7 @@ describe('TaskService', () => {
     ]);
 
     expect(firstResult).toEqual(concurrentResult);
-    expect(userClient.enrichTasks).toHaveBeenCalledTimes(1);
-    expect(userClient.enrichTasks).toHaveBeenCalledWith(
-      rows,
-      'payload',
-      'request-first',
-    );
+    expect(userClient.enrichTasks).not.toHaveBeenCalled();
 
     await service.findMine(user, query, 'payload', 'request-after-completion');
     expect(taskModel.find).toHaveBeenCalledTimes(1);
