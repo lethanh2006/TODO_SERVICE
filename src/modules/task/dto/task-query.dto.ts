@@ -1,5 +1,6 @@
 import { Transform, Type } from 'class-transformer';
 import {
+  IsDateString,
   IsIn,
   IsInt,
   IsMongoId,
@@ -19,10 +20,31 @@ export class MyTaskQueryDto {
   status?: TaskStatus;
 
   @IsOptional()
-  @IsIn(['low', 'medium', 'high'], {
-    message: 'priority phải là low, medium hoặc high',
+  @IsIn(['low', 'medium', 'high', 'urgent'], {
+    message: 'priority phải là low, medium, high hoặc urgent',
   })
   priority?: TaskPriority;
+
+  @IsOptional()
+  @IsIn(['deadline', 'priority', 'createdAt', 'title', 'updatedAt'], {
+    message:
+      'sortBy phải là deadline, priority, createdAt, title hoặc updatedAt',
+  })
+  sortBy?: 'deadline' | 'priority' | 'createdAt' | 'title' | 'updatedAt';
+
+  @IsOptional()
+  @IsIn(['asc', 'desc'], {
+    message: 'order phải là asc hoặc desc',
+  })
+  order?: 'asc' | 'desc';
+
+  @IsOptional()
+  @IsDateString({}, { message: 'deadlineFrom phải là định dạng ISO 8601' })
+  deadlineFrom?: string;
+
+  @IsOptional()
+  @IsDateString({}, { message: 'deadlineTo phải là định dạng ISO 8601' })
+  deadlineTo?: string;
 
   @IsOptional()
   @Transform(({ value }: { value: unknown }) =>

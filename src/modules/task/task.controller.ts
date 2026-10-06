@@ -18,7 +18,11 @@ import { RolesGuard } from '../../common/guards/roles.guard';
 import { AssignTaskDto } from './dto/assign-task.dto';
 import { CreateTaskDto } from './dto/create-task.dto';
 import { MyTaskQueryDto, TaskQueryDto } from './dto/task-query.dto';
+import { UpcomingDeadlineQueryDto } from './dto/upcoming-deadline-query.dto';
+import { UpdateTaskDeadlineDto } from './dto/update-task-deadline.dto';
 import { UpdateTaskDto } from './dto/update-task.dto';
+import { UpdateTaskPriorityDto } from './dto/update-task-priority.dto';
+import { UpdateTaskProgressDto } from './dto/update-task-progress.dto';
 import { UpdateTaskStatusDto } from './dto/update-task-status.dto';
 import { TaskService } from './task.service';
 
@@ -79,6 +83,60 @@ export class TaskController {
     @Req() request: RequestWithContext,
   ) {
     return this.taskService.update(id, body, request.user!);
+  }
+
+  @Patch(':id/priority')
+  @Roles(...MANAGEMENT_ROLES)
+  updatePriority(
+    @Param('id') id: string,
+    @Body() body: UpdateTaskPriorityDto,
+    @Req() request: RequestWithContext,
+  ) {
+    return this.taskService.updatePriority(id, body.priority, request.user!);
+  }
+
+  @Patch(':id/deadline')
+  @Roles(...MANAGEMENT_ROLES)
+  updateDeadline(
+    @Param('id') id: string,
+    @Body() body: UpdateTaskDeadlineDto,
+    @Req() request: RequestWithContext,
+  ) {
+    return this.taskService.updateDeadline(id, body.deadline, request.user!);
+  }
+
+  @Patch(':id/progress')
+  @Authenticated()
+  updateProgress(
+    @Param('id') id: string,
+    @Body() body: UpdateTaskProgressDto,
+    @Req() request: RequestWithContext,
+  ) {
+    return this.taskService.updateProgress(id, body.progress, request.user!);
+  }
+
+  @Get('overdue')
+  @Authenticated()
+  getOverdue(@Req() request: RequestWithContext) {
+    return this.taskService.getOverdue(
+      request.user!,
+      this.userPayload(request),
+      this.requestId(request),
+    );
+  }
+
+  @Get('upcoming-deadline')
+  @Authenticated()
+  getUpcomingDeadline(
+    @Query() query: UpcomingDeadlineQueryDto,
+    @Req() request: RequestWithContext,
+  ) {
+    return this.taskService.getUpcomingDeadline(
+      query.days,
+      request.user!,
+      this.userPayload(request),
+      this.requestId(request),
+    );
   }
 
   @Get()

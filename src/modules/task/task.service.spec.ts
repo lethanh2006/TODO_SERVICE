@@ -490,4 +490,149 @@ describe('TaskService', () => {
       expect(taskModel.findOneAndUpdate).not.toHaveBeenCalled();
     },
   );
+
+  describe('updateDeadline', () => {
+    it('chặn người dùng thường đổi hạn chót', async () => {
+      const { service } = createHarness();
+      await expect(
+        service.updateDeadline(TASK_ID, '2030-01-01T00:00:00.000Z', {
+          _id: USER_ID,
+          role: 'waiter',
+        }),
+      ).rejects.toBeInstanceOf(ForbiddenException);
+    });
+
+    it('chặn đổi hạn chót về thời điểm quá khứ', async () => {
+      const { service, taskModel } = createHarness();
+      taskModel.findById.mockResolvedValue({
+        _id: TASK_ID,
+        status: 'in_progress',
+      });
+      await expect(
+        service.updateDeadline(TASK_ID, '2020-01-01T00:00:00.000Z', {
+          _id: MANAGER_ID,
+          role: 'manager',
+        }),
+      ).rejects.toBeInstanceOf(BadRequestException);
+    });
+
+    it('chặn đổi hạn chót khi công việc đã xong hoặc huỷ', async () => {
+      const { service, taskModel } = createHarness();
+      taskModel.findById.mockResolvedValue({ _id: TASK_ID, status: 'done' });
+      await expect(
+        service.updateDeadline(TASK_ID, '2030-01-01T00:00:00.000Z', {
+          _id: MANAGER_ID,
+          role: 'manager',
+        }),
+      ).rejects.toBeInstanceOf(ConflictException);
+    });
+
+    it('cập nhật hạn chót thành công', async () => {
+      const { service, taskModel } = createHarness();
+      const futureDate = '2030-01-01T00:00:00.000Z';
+      taskModel.findById.mockResolvedValue({
+        _id: TASK_ID,
+        status: 'in_progress',
+      });
+      const updated = { _id: TASK_ID, deadline: new Date(futureDate) };
+      taskModel.findByIdAndUpdate.mockResolvedValue(updated);
+
+      const result = await service.updateDeadline(TASK_ID, futureDate, {
+        _id: MANAGER_ID,
+        role: 'manager',
+      });
+      expect(result.message).toBe('Cập nhật hạn chót thành công');
+      expect(result.task).toEqual(expect.objectContaining({ _id: TASK_ID }));
+    });
+  });
+
+  describe('updateProgress', () => {
+    it('chặn khi task không ở trạng thái in_progress', async () => {
+      const { service, taskModel } = createHarness();
+      taskModel.findById.mockResolvedValue({
+        _id: TASK_ID,
+        assignedTo: USER_ID,
+        status: 'todo',
+      });
+      await expect(
+        service.updateProgress(TASK_ID, 50, { _id: USER_ID, role: 'waiter' }),
+      ).rejects.toBeInstanceOf(ConflictException);
+    });
+
+    it('chặn người dùng khác không được giao cập nhật tiến độ', async () => {
+      const { service, taskModel } = createHarness();
+      taskModel.findById.mockResolvedValue({
+        _id: TASK_ID,
+        assignedTo: OTHER_USER_ID,
+        status: 'in_progress',
+      });
+      await expect(
+        service.updateProgress(TASK_ID, 50, { _id: USER_ID, role: 'waiter' }),
+      ).rejects.toBeInstanceOf(ForbiddenException);
+    });
+
+    it('cập nhật tiến độ thành công khi người được giao gọi', async () => {
+      const { service, taskModel } = createHarness();
+      taskModel.findById.mockResolvedValue({
+        _id: TASK_ID,
+        assignedTo: USER_ID,
+        status: 'in_progress',
+      });
+      const updated = { _id: TASK_ID, progress: 75 };
+      taskModel.findByIdAndUpdate.mockResolvedValue(updated);
+
+      const result = await service.updateProgress(TASK_ID, 75, {
+        _id: USER_ID,
+        role: 'waiter',
+      });
+      expect(result.message).toBe('Cập nhật tiến độ thành công');
+      expect(result.task.progress).toBe(75);
+    });
+  });
+
+  describe('overdue and upcoming deadline', () => {
+    it('getOverdue lọc task có deadline trong quá khứ và chưa xong', async () => {
+      const { service, taskModel, userClient } = createHarness();
+      const overdueTask = {
+        _id: TASK_ID,
+        deadline: new Date('2020-01-01T00:00:00.000Z'),
+        status: 'in_progress',
+      };
+      const lean = jest.fn().mockResolvedValue([overdueTask]);
+      const sort = jest.fn().mockReturnValue({ lean });
+      taskModel.find.mockReturnValue({ sort });
+      userClient.enrichTasks.mockResolvedValue([overdueTask]);
+
+      const result = await service.getOverdue(
+        { _id: MANAGER_ID, role: 'manager' },
+        'payload',
+        'req-1',
+      );
+      expect(result.total).toBe(1);
+      expect(result.tasks[0].isOverdue).toBe(true);
+    });
+
+    it('getUpcomingDeadline lọc task có deadline trong tương lai gần', async () => {
+      const { service, taskModel, userClient } = createHarness();
+      const futureDate = new Date(Date.now() + 24 * 60 * 60 * 1000);
+      const upcomingTask = {
+        _id: TASK_ID,
+        deadline: futureDate,
+        status: 'in_progress',
+      };
+      const lean = jest.fn().mockResolvedValue([upcomingTask]);
+      const sort = jest.fn().mockReturnValue({ lean });
+      taskModel.find.mockReturnValue({ sort });
+      userClient.enrichTasks.mockResolvedValue([upcomingTask]);
+
+      const result = await service.getUpcomingDeadline(
+        3,
+        { _id: USER_ID, role: 'waiter' },
+        'payload',
+        'req-2',
+      );
+      expect(result.total).toBe(1);
+      expect(result.tasks[0].isOverdue).toBe(false);
+    });
+  });
 });
